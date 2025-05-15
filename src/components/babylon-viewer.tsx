@@ -52,18 +52,21 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if (!container || !sceneRef.current) return;
 
     container.meshes.forEach((mesh: AbstractMesh) => {
+      if (mesh.name === "grid") { // Explicitly skip the grid
+        return;
+      }
+
       if (mesh.material) {
         const processMaterial = (mat: Material) => {
-          // General resets
+          // Default to non-wireframe and shaded
           mat.wireframe = false;
-          
           if (mat instanceof PBRMaterial) {
-            mat.unlit = false;
+            mat.unlit = false; 
           } else if (mat instanceof StandardMaterial) {
             mat.disableLighting = false;
           }
 
-          // Apply new mode
+          // Apply the specific mode
           if (mode === 'wireframe') {
             mat.wireframe = true;
           } else if (mode === 'non-shaded') {
@@ -73,7 +76,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
               mat.disableLighting = true;
             }
           }
-          // 'shaded' is the default state after resets
+          // 'shaded' mode is achieved by the defaults set above.
         };
 
         if (mesh.material instanceof MultiMaterial) {
@@ -119,7 +122,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     gridMaterial.useMaxLine = true;
     ground.material = gridMaterial;
     ground.isPickable = false;
-    ground.position.y = 0;
+    ground.position.y = 0; // Ensure grid is at y=0
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -135,28 +138,29 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         engineRef.current.resize();
       }
     });
-    resizeObserver.observe(canvasRef.current);
+    if (canvasRef.current) { // Check canvasRef.current again before observing
+        resizeObserver.observe(canvasRef.current);
+    }
+
 
     return () => {
       resizeObserver.disconnect();
       if (sceneRef.current) {
-        sceneRef.current.dispose(); // This will dispose meshes, materials, lights etc.
+        sceneRef.current.dispose(); 
         sceneRef.current = null;
       }
       if (engineRef.current) {
         engineRef.current.dispose();
         engineRef.current = null;
       }
-      // Asset container is disposed in the model loading effect
     };
-  }, [onCameraReady, onFpsUpdate]); // Only depends on stable callbacks
+  }, [onCameraReady, onFpsUpdate]); 
 
   // Effect for loading models
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene || !onModelLoaded) return; // Ensure onModelLoaded is defined
+    if (!scene || !onModelLoaded) return; 
 
-    // Reset loaded state when modelUrl or extension changes
     setIsCurrentModelActuallyLoaded(false);
 
     if (loadedAssetContainerRef.current) {
@@ -172,17 +176,14 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             camera.alpha = -Math.PI / 2;
             camera.beta = Math.PI / 2.5;
         }
-        // Intentionally not calling onModelLoaded for "no model" state to avoid toasts
-        // Or, if a "model cleared" toast is desired, call it here.
-        // For now, let's assume no toast for clearing.
         return;
     }
 
     const isDataUrl = modelUrl.startsWith('data:');
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
-    const pluginHint = modelFileExtension || undefined; // Use file extension directly as hint
+    const pluginExtension = modelFileExtension || undefined; 
 
-    SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginHint)
+    SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginExtension)
       .then(container => {
         loadedAssetContainerRef.current = container;
         container.addAllToScene();
@@ -206,15 +207,17 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           if (min.x !== Infinity) { 
             const center = Vector3.Center(min, max);
             camera.setTarget(center);
-            const distance = Vector3.Distance(min, max);
-            camera.radius = Math.max(distance * 1.5, 1); 
+            // Adjust radius calculation for better default zoom
+            const modelSize = Vector3.Distance(min, max);
+            camera.radius = Math.max(modelSize * 1.2, 1); // Ensure radius is at least 1, and 1.2x model size
+            if (camera.radius === 0) camera.radius = 10; // Fallback if model size is 0
           } else {
              camera.setTarget(Vector3.Zero());
              camera.radius = 10;
           }
         }
-        onModelLoaded(true); // THIS IS THE SUCCESS TOAST
-        setIsCurrentModelActuallyLoaded(true); // Signal that model is loaded
+        onModelLoaded(true);
+        setIsCurrentModelActuallyLoaded(true); 
       })
       .catch(error => {
         console.error("Error loading model:", error);
@@ -231,20 +234,21 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
         onModelLoaded(false, userMessage);
         setIsCurrentModelActuallyLoaded(false);
-        if (loadedAssetContainerRef.current) { // Clean up if partially loaded
+        if (loadedAssetContainerRef.current) { 
             loadedAssetContainerRef.current.dispose();
             loadedAssetContainerRef.current = null;
         }
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef]); // Dependencies ONLY related to *what* model to load and reporting.
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef]); 
 
   // Effect to apply rendering mode style (when mode changes OR when a new model just finished loading)
   useEffect(() => {
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
     }
-  }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle]); // Depends on mode and load status
+  }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle]); 
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
+
