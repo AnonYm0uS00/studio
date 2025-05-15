@@ -17,11 +17,15 @@ import {
   Material, 
   PBRMaterial, 
   StandardMaterial,
-  MultiMaterial
+  MultiMaterial,
+  Node, // Import Node
+  TransformNode, // Import TransformNode
+  Mesh // Import Mesh for instanceof checks
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
-import '@babylonjs/loaders/glTF'; // For GLTF/GLB support
-import '@babylonjs/loaders/OBJ';  // For OBJ support
+import '@babylonjs/loaders/glTF'; 
+import '@babylonjs/loaders/OBJ';  
+import type { ModelNode } from './types';
 
 export type RenderingMode = 'shaded' | 'non-shaded' | 'wireframe';
 
@@ -32,6 +36,7 @@ interface BabylonViewerProps {
   onCameraReady: (camera: ArcRotateCamera) => void;
   onFpsUpdate?: (fps: number) => void;
   renderingMode: RenderingMode;
+  onModelHierarchyReady?: (hierarchy: ModelNode[]) => void;
 }
 
 export const BabylonViewer: React.FC<BabylonViewerProps> = ({ 
@@ -40,7 +45,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   onModelLoaded, 
   onCameraReady,
   onFpsUpdate,
-  renderingMode
+  renderingMode,
+  onModelHierarchyReady
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Nullable<Engine>>(null);
@@ -52,13 +58,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if (!container || !sceneRef.current) return;
 
     container.meshes.forEach((mesh: AbstractMesh) => {
-      if (mesh.name === "grid") { // Explicitly skip the grid
+      if (mesh.name === "grid") { 
         return;
       }
 
       if (mesh.material) {
         const processMaterial = (mat: Material) => {
-          // Default to non-wireframe and shaded
           mat.wireframe = false;
           if (mat instanceof PBRMaterial) {
             mat.unlit = false; 
@@ -66,7 +71,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             mat.disableLighting = false;
           }
 
-          // Apply the specific mode
           if (mode === 'wireframe') {
             mat.wireframe = true;
           } else if (mode === 'non-shaded') {
@@ -76,7 +80,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
               mat.disableLighting = true;
             }
           }
-          // 'shaded' mode is achieved by the defaults set above.
         };
 
         if (mesh.material instanceof MultiMaterial) {
@@ -88,9 +91,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       }
     });
-  }, [sceneRef]); // sceneRef is stable
+  }, [sceneRef]);
 
-  // Effect for initial scene setup (engine, scene, camera, lights, grid, render loop)
   useEffect(() => {
     if (!canvasRef.current) return;
 
@@ -122,7 +124,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     gridMaterial.useMaxLine = true;
     ground.material = gridMaterial;
     ground.isPickable = false;
-    ground.position.y = 0; // Ensure grid is at y=0
+    ground.position.y = 0;
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -138,10 +140,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         engineRef.current.resize();
       }
     });
-    if (canvasRef.current) { // Check canvasRef.current again before observing
+    if (canvasRef.current) {
         resizeObserver.observe(canvasRef.current);
     }
-
 
     return () => {
       resizeObserver.disconnect();
@@ -156,12 +157,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     };
   }, [onCameraReady, onFpsUpdate]); 
 
-  // Effect for loading models
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !onModelLoaded) return; 
 
     setIsCurrentModelActuallyLoaded(false);
+    if (onModelHierarchyReady) onModelHierarchyReady([]); // Clear hierarchy
 
     if (loadedAssetContainerRef.current) {
       loadedAssetContainerRef.current.dispose();
@@ -207,10 +208,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           if (min.x !== Infinity) { 
             const center = Vector3.Center(min, max);
             camera.setTarget(center);
-            // Adjust radius calculation for better default zoom
             const modelSize = Vector3.Distance(min, max);
-            camera.radius = Math.max(modelSize * 1.2, 1); // Ensure radius is at least 1, and 1.2x model size
-            if (camera.radius === 0) camera.radius = 10; // Fallback if model size is 0
+            camera.radius = Math.max(modelSize * 1.2, 1); 
+            if (camera.radius === 0) camera.radius = 10; 
           } else {
              camera.setTarget(Vector3.Zero());
              camera.radius = 10;
@@ -218,6 +218,43 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
         onModelLoaded(true);
         setIsCurrentModelActuallyLoaded(true); 
+
+        if (onModelHierarchyReady) {
+          const buildNodeHierarchy = (babylonNode: Node): ModelNode => {
+            let nodeType = "Node";
+            if (babylonNode instanceof Mesh) nodeType = "Mesh";
+            else if (babylonNode instanceof TransformNode) nodeType = "TransformNode";
+            // Could add more types like Light, Camera if they are part of the container's nodes
+        
+            const children = (babylonNode.getChildren ? babylonNode.getChildren() : [])
+                .filter(child => child.getScene() === scene && !(child instanceof HemisphericLight) && !(child instanceof ArcRotateCamera) && child.name !== "grid") 
+                .map(buildNodeHierarchy);
+        
+            return {
+              id: babylonNode.uniqueId.toString(),
+              name: babylonNode.name || `Unnamed ${nodeType}`,
+              type: nodeType,
+              children: children,
+            };
+          };
+        
+          // Start from the container's root nodes. These are nodes at the top level of the loaded asset.
+          // Filter out scene setup elements more robustly
+          const hierarchyRoots: ModelNode[] = container.rootNodes
+            .filter(node => 
+                node.name !== "grid" && 
+                node.name !== "camera" && 
+                !node.name.startsWith("light") && 
+                !(node.name.startsWith("__") && node.name.endsWith("__")) && // Common for internal/root nodes
+                !(node instanceof HemisphericLight) &&
+                !(node instanceof ArcRotateCamera)
+            )
+            .map(buildNodeHierarchy);
+        
+          onModelHierarchyReady(hierarchyRoots);
+        }
+
+
       })
       .catch(error => {
         console.error("Error loading model:", error);
@@ -240,9 +277,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef]); 
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady]); 
 
-  // Effect to apply rendering mode style (when mode changes OR when a new model just finished loading)
   useEffect(() => {
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
