@@ -208,7 +208,7 @@ export default function Home() {
         {submittedModelUrl && !error && !isLoading && (
           <aside className="w-80 bg-card border-l border-border p-4 overflow-y-auto flex-shrink-0 h-full">
             <h2 className="text-xl font-semibold mb-4 text-primary sticky top-0 bg-card py-2 z-10">Details</h2>
-            <Accordion type="single" collapsible defaultValue="object" className="w-full">
+            <Accordion type="multiple" collapsible defaultValue={["object"]} className="w-full">
               <AccordionItem value="object">
                 <AccordionTrigger>Object</AccordionTrigger>
                 <AccordionContent>
