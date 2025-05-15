@@ -10,7 +10,7 @@ import { AlertTriangle, IterationCcw, UploadCloud } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import type { ModelNode } from '@/components/types';
-import { ModelHierarchyView } from '@/components/model-hierarchy-view';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 
 export default function Home() {
@@ -26,14 +26,14 @@ export default function Home() {
   const [renderingMode, setRenderingMode] = useState<RenderingMode>('shaded');
 
   const [modelName, setModelName] = useState<string | null>(null);
-  const [modelHierarchy, setModelHierarchy] = useState<ModelNode[] | null>(null);
+  // const [modelHierarchy, setModelHierarchy] = useState<ModelNode[] | null>(null); // Hierarchy removed from UI
 
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFileName(file.name);
       setModelName(file.name); 
-      setModelHierarchy(null); 
+      // setModelHierarchy(null); // Hierarchy removed from UI
 
       const nameParts = file.name.split('.');
       const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
@@ -64,7 +64,7 @@ export default function Home() {
       setSubmittedModelUrl(null);
       setModelFileExtension(null);
       setModelName(null);
-      setModelHierarchy(null);
+      // setModelHierarchy(null); // Hierarchy removed from UI
     }
   };
 
@@ -72,23 +72,22 @@ export default function Home() {
     setIsLoading(false);
     if (!success) {
       setError(errorMessage || "Failed to load model.");
-      setModelHierarchy(null); 
+      // setModelHierarchy(null); // Hierarchy removed from UI
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (GLB, GLTF, OBJ).", variant: "destructive" });
     } else {
       setError(null); 
-      if (selectedFileName) {
-         // Toast is now handled by the viewer itself to avoid re-triggering on mode change
-      }
+      // Toast is now handled by the viewer itself to avoid re-triggering on mode change
     }
-  }, [toast, selectedFileName]);
+  }, [toast]);
 
   const handleCameraReady = useCallback((camera: ArcRotateCamera) => {
     cameraRef.current = camera;
   }, []);
 
-  const handleModelHierarchyReady = useCallback((hierarchy: ModelNode[]) => {
-    setModelHierarchy(hierarchy);
-  }, []);
+  // Hierarchy removed from UI
+  // const handleModelHierarchyReady = useCallback((hierarchy: ModelNode[]) => {
+  //   setModelHierarchy(hierarchy);
+  // }, []);
 
   const triggerFileDialog = () => {
     fileInputRef.current?.click();
@@ -101,129 +100,138 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       <header className="p-4 shadow-md bg-card flex-shrink-0 z-10">
-        <div className="container mx-auto flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
-          <div className="flex items-center gap-2">
-            <IterationCcw className="h-8 w-8 text-accent" />
-            <h1 className="text-2xl font-semibold text-primary whitespace-nowrap">Open3D Viewer</h1>
-          </div>
-          <div className="flex flex-grow gap-2 items-center w-full sm:w-auto">
-            <Input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileSelected}
-              className="hidden" 
-              accept=".glb,.gltf,.obj"
-              aria-label="3D Model File"
-            />
-            <Button onClick={triggerFileDialog} variant="outline" className="flex-grow justify-start text-muted-foreground">
-              <UploadCloud className="mr-2 h-4 w-4" />
-              {selectedFileName || "Click to select a 3D model file (.glb, .gltf, .obj)"}
-            </Button>
-          </div>
+        <div className="container mx-auto flex items-center justify-center sm:justify-start gap-2">
+          <IterationCcw className="h-8 w-8 text-accent" />
+          <h1 className="text-2xl font-semibold text-primary whitespace-nowrap">Open3D Viewer</h1>
         </div>
       </header>
 
-      <div className="flex flex-grow overflow-hidden"> {/* Container for viewer and side panel */}
-        <main className="flex-grow relative h-full"> {/* Main viewer area */}
-          <BabylonViewer
-            modelUrl={submittedModelUrl}
-            modelFileExtension={modelFileExtension}
-            onModelLoaded={handleModelLoaded}
-            onCameraReady={handleCameraReady}
-            onFpsUpdate={handleFpsUpdate}
-            renderingMode={renderingMode}
-            onModelHierarchyReady={handleModelHierarchyReady}
-          />
+      <div className="flex flex-grow overflow-hidden"> {/* Container for viewer and side panel OR upload card */}
+        {/* Conditional rendering for main content area */}
+        {!submittedModelUrl && !isLoading && !error ? (
+            <main className="flex-grow relative h-full flex items-center justify-center p-4">
+                <Card className="w-full max-w-md shadow-xl">
+                    <CardHeader>
+                        <CardTitle className="text-center text-2xl">Upload 3D Model</CardTitle>
+                        <CardDescription className="text-center">
+                            Select a 3D model file from your computer to view it.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col items-center gap-4">
+                        <Input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileSelected}
+                            className="hidden"
+                            accept=".glb,.gltf,.obj"
+                            aria-label="3D Model File"
+                        />
+                        <Button onClick={triggerFileDialog} variant="default" size="lg" className="w-full">
+                            <UploadCloud className="mr-2 h-5 w-5" />
+                            {selectedFileName ? "Change File" : "Select 3D Model File"}
+                        </Button>
+                        {selectedFileName && (
+                            <p className="text-sm text-muted-foreground">Selected: {selectedFileName}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Supported formats: .glb, .gltf, .obj
+                        </p>
+                    </CardContent>
+                </Card>
+            </main>
+        ) : (
+            <>
+                <main className="flex-grow relative h-full"> {/* Main viewer area */}
+                <BabylonViewer
+                    modelUrl={submittedModelUrl}
+                    modelFileExtension={modelFileExtension}
+                    onModelLoaded={handleModelLoaded}
+                    onCameraReady={handleCameraReady}
+                    onFpsUpdate={handleFpsUpdate}
+                    renderingMode={renderingMode}
+                    // onModelHierarchyReady={handleModelHierarchyReady} // Hierarchy removed from UI
+                />
 
-          {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-30">
-              <div className="flex flex-col items-center">
-                <svg className="animate-spin h-10 w-10 text-primary mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p className="text-foreground text-lg">Loading 3D Model...</p>
-                {selectedFileName && <p className="text-muted-foreground text-sm">File: {selectedFileName}</p>}
-              </div>
-            </div>
-          )}
+                {isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-30">
+                    <div className="flex flex-col items-center">
+                        <svg className="animate-spin h-10 w-10 text-primary mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p className="text-foreground text-lg">Loading 3D Model...</p>
+                        {selectedFileName && <p className="text-muted-foreground text-sm">File: {selectedFileName}</p>}
+                    </div>
+                    </div>
+                )}
 
-          {!isLoading && error && ( 
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-20 p-4">
-              <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
-              <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Model</h2>
-              <p className="text-muted-foreground text-center max-w-md">{error}</p>
-              <p className="text-muted-foreground text-sm mt-2">
-                Please ensure the selected file is a valid 3D model (e.g., .glb, .gltf, .obj) and not corrupted.
-              </p>
-            </div>
-          )}
+                {!isLoading && error && ( 
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-20 p-4">
+                    <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
+                    <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Model</h2>
+                    <p className="text-muted-foreground text-center max-w-md">{error}</p>
+                    <p className="text-muted-foreground text-sm mt-2">
+                        Please ensure the selected file is a valid 3D model (e.g., .glb, .gltf, .obj) and not corrupted.
+                    </p>
+                    </div>
+                )}
 
-          {!isLoading && !error && !submittedModelUrl && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-20 p-4 text-center">
-              <UploadCloud className="w-24 h-24 text-muted-foreground mb-6" />
-              <h2 className="text-2xl font-semibold text-foreground mb-2">Welcome to Open3D Viewer</h2>
-              <p className="text-muted-foreground max-w-md mb-4">
-                Click the button above to select a 3D model file from your computer.
-              </p>
-              <p className="text-muted-foreground text-sm">
-                Supported formats: .glb, .gltf, .obj
-              </p>
-            </div>
-          )}
-           {/* FPS Display and Rendering Mode Buttons positioned relative to this main container */}
-            {submittedModelUrl && !error && !isLoading && (
-              <>
-                <div className="absolute bottom-4 right-4 bg-card/90 text-card-foreground p-2 rounded-md shadow-md border border-border z-20 text-sm">
-                  FPS: {currentFps}
-                </div>
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 flex gap-2">
-                  <Button
-                    variant={renderingMode === 'shaded' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setRenderingMode('shaded')}
-                  >
-                    Shaded
-                  </Button>
-                  <Button
-                    variant={renderingMode === 'non-shaded' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setRenderingMode('non-shaded')}
-                  >
-                    Non-Shaded
-                  </Button>
-                  <Button
-                    variant={renderingMode === 'wireframe' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setRenderingMode('wireframe')}
-                  >
-                    Wireframe
-                  </Button>
-                </div>
-              </>
-            )}
-        </main>
+                {/* FPS Display and Rendering Mode Buttons positioned relative to this main container */}
+                {submittedModelUrl && !error && !isLoading && (
+                    <>
+                        <div className="absolute bottom-4 right-4 bg-card/90 text-card-foreground p-2 rounded-md shadow-md border border-border z-20 text-sm">
+                        FPS: {currentFps}
+                        </div>
+                        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 flex gap-2">
+                        <Button
+                            variant={renderingMode === 'shaded' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setRenderingMode('shaded')}
+                        >
+                            Shaded
+                        </Button>
+                        <Button
+                            variant={renderingMode === 'non-shaded' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setRenderingMode('non-shaded')}
+                        >
+                            Non-Shaded
+                        </Button>
+                        <Button
+                            variant={renderingMode === 'wireframe' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setRenderingMode('wireframe')}
+                        >
+                            Wireframe
+                        </Button>
+                        </div>
+                    </>
+                    )}
+                </main>
 
-        {/* Details Panel */}
-        {submittedModelUrl && !error && !isLoading && (
-          <aside className="w-80 bg-card border-l border-border p-4 overflow-y-auto flex-shrink-0 h-full">
-            <h2 className="text-xl font-semibold mb-4 text-primary sticky top-0 bg-card py-2 z-10">Details</h2>
-            <Accordion type="multiple" defaultValue={["object"]} className="w-full">
-              <AccordionItem value="object">
-                <AccordionTrigger>Object</AccordionTrigger>
-                <AccordionContent>
-                  {modelName && <p className="font-semibold mb-1 text-foreground">Name: <span className="font-normal text-muted-foreground">{modelName}</span></p>}
-                  {!modelName && <p className="text-sm text-muted-foreground italic">No model loaded or name available.</p>}
-                </AccordionContent>
-              </AccordionItem>
-              <AccordionItem value="materials">
-                <AccordionTrigger>Materials</AccordionTrigger>
-                <AccordionContent>
-                  <p className="text-sm text-muted-foreground italic">Material details will be implemented later.</p>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </aside>
+                {/* Details Panel */}
+                {submittedModelUrl && !error && !isLoading && (
+                <aside className="w-80 bg-card border-l border-border p-4 overflow-y-auto flex-shrink-0 h-full">
+                    <h2 className="text-xl font-semibold mb-4 text-primary sticky top-0 bg-card py-2 z-10">Details</h2>
+                    <Accordion type="multiple" defaultValue={["object"]} className="w-full">
+                    <AccordionItem value="object">
+                        <AccordionTrigger>Object</AccordionTrigger>
+                        <AccordionContent>
+                        {modelName && <p className="font-semibold mb-1 text-foreground">Name: <span className="font-normal text-muted-foreground">{modelName}</span></p>}
+                        {!modelName && <p className="text-sm text-muted-foreground italic">No model loaded or name available.</p>}
+                        {/* Hierarchy removed from here */}
+                        </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="materials">
+                        <AccordionTrigger>Materials</AccordionTrigger>
+                        <AccordionContent>
+                        <p className="text-sm text-muted-foreground italic">Material details will be implemented later.</p>
+                        </AccordionContent>
+                    </AccordionItem>
+                    </Accordion>
+                </aside>
+                )}
+            </>
         )}
       </div>
     </div>
