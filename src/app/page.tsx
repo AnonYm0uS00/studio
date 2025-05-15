@@ -6,13 +6,11 @@ import { Vector3 } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer, type RenderingMode } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon, SplineIcon } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
 import { ModelHierarchyView } from '@/components/model-hierarchy-view';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,9 +19,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
 
+
+type Theme = "light" | "dark" | "system";
 
 export default function Home() {
   const [submittedModelUrl, setSubmittedModelUrl] = useState<string | null>(null);
@@ -37,11 +39,46 @@ export default function Home() {
   
   const [modelName, setModelName] = useState<string | null>(null);
   const [modelHierarchy, setModelHierarchy] = useState<ModelNode[]>([]);
-  const [renderingMode, setRenderingMode] = useState<RenderingMode>('shaded');
   const [currentFps, setCurrentFps] = useState<number>(0);
 
   const [nearClip, setNearClip] = useState<number>(0.1);
   const [farClip, setFarClip] = useState<number>(2000);
+  const [theme, setTheme] = useState<Theme>("system");
+
+  useEffect(() => {
+    const storedTheme = localStorage.getItem("theme") as Theme | null;
+    if (storedTheme) {
+      setTheme(storedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    const applyTheme = (chosenTheme: Theme) => {
+      if (
+        chosenTheme === "dark" ||
+        (chosenTheme === "system" &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      ) {
+        document.documentElement.classList.add("dark");
+        if (chosenTheme === 'dark') localStorage.setItem("theme", "dark");
+        else localStorage.removeItem("theme");
+
+      } else {
+        document.documentElement.classList.remove("dark");
+        if (chosenTheme === 'light') localStorage.setItem("theme", "light");
+        else localStorage.removeItem("theme");
+      }
+    };
+
+    applyTheme(theme);
+
+    if (theme === "system") {
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handleChange = () => applyTheme("system");
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+  }, [theme]);
 
 
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
@@ -165,6 +202,21 @@ export default function Home() {
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs font-semibold">Theme</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as Theme)}>
+                  <DropdownMenuRadioItem value="light" className="text-xs">
+                    <Sun className="mr-2 h-3.5 w-3.5" /> Light
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark" className="text-xs">
+                    <Moon className="mr-2 h-3.5 w-3.5" /> Dark
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="system" className="text-xs">
+                    <Laptop className="mr-2 h-3.5 w-3.5" /> System
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -264,7 +316,6 @@ export default function Home() {
                   modelFileExtension={modelFileExtension}
                   onModelLoaded={handleModelLoaded}
                   onCameraReady={handleCameraReady}
-                  renderingMode={renderingMode}
                   onFpsUpdate={handleFpsUpdate}
                   onModelHierarchyReady={handleModelHierarchyReady}
                   nearClip={nearClip}
@@ -322,3 +373,4 @@ export default function Home() {
   );
 }
     
+
