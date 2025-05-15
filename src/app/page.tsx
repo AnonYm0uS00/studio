@@ -2,6 +2,7 @@
 'use client';
 import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
+import { Vector3 } from '@babylonjs/core'; // Import Vector3
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
@@ -60,7 +61,9 @@ export default function Home() {
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (GLB, GLTF, OBJ).", variant: "destructive" });
     } else {
       setError(null); // Clear previous errors on successful load
-      toast({ title: "Success", description: `${selectedFileName || 'Model'} loaded successfully.` });
+      if (selectedFileName) {
+         toast({ title: "Success", description: `${selectedFileName} loaded successfully.` });
+      }
     }
   }, [toast, selectedFileName]);
 
@@ -77,7 +80,7 @@ export default function Home() {
   const panCamera = (axis: 'x' | 'y', amount: number) => {
     if (cameraRef.current) {
       const panSpeed = cameraRef.current.radius * 0.02; // Adjust pan speed based on camera distance
-      const direction = cameraRef.current.getDirection(axis === 'x' ? new BABYLON.Vector3(1,0,0) : new BABYLON.Vector3(0,1,0));
+      const direction = cameraRef.current.getDirection(axis === 'x' ? new Vector3(1,0,0) : new Vector3(0,1,0));
       cameraRef.current.target.addInPlace(direction.scale(amount * panSpeed));
     }
   };
