@@ -56,35 +56,43 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   const loadedAssetContainerRef = useRef<Nullable<AssetContainer>>(null);
   const [isCurrentModelActuallyLoaded, setIsCurrentModelActuallyLoaded] = useState(false);
 
-  const applyMeshOverlay = useCallback((container: Nullable<AssetContainer>, enabled: boolean) => {
-    if (!container || !sceneRef.current) return;
+  const toggleWireframeEdges = useCallback((container: Nullable<AssetContainer>, enabled: boolean) => {
+    if (!container) return;
     container.meshes.forEach((mesh: AbstractMesh) => {
       if (mesh.name === "grid") return; // Skip grid
-      mesh.renderOverlay = enabled;
+
       if (enabled) {
-        mesh.overlayColor = Color3.FromHexString("#008080"); // Teal color for visibility
-        mesh.overlayAlpha = 0.5; // Increased alpha for better visibility
+        // Epsilon closer to 1 (e.g., 0.9999) shows edges between faces with smaller angle differences.
+        // This helps to show more polygon lines, aiming for a full wireframe appearance.
+        mesh.enableEdgesRendering(0.9999); 
+        mesh.edgesWidth = 1.5; 
+        mesh.edgesColor = Color4.FromColor3(Color3.FromHexString("#008080"), 1); // Teal, fully opaque
+      } else {
+        if (mesh.edgesRenderer) {
+          mesh.edgesRenderer.isEnabled = false;
+        }
       }
     });
-  }, [sceneRef]);
+  }, []);
 
   const applyRenderingModeStyle = useCallback((mode: RenderingMode, container: Nullable<AssetContainer>) => {
     if (!container || !sceneRef.current) return;
 
     container.meshes.forEach((mesh: AbstractMesh) => {
-      if (mesh.name === "grid") {
+      if (mesh.name === "grid") { // Explicitly skip grid material changes
         return;
       }
 
       if (mesh.material) {
         const processMaterial = (mat: Material) => {
-          mat.wireframe = false;
+          mat.wireframe = false; // Reset wireframe
           if (mat instanceof PBRMaterial) {
-            mat.unlit = false;
+            mat.unlit = false; // Reset unlit
           } else if (mat instanceof StandardMaterial) {
-            mat.disableLighting = false;
+            mat.disableLighting = false; // Reset disableLighting
           }
 
+          // Apply new mode
           if (mode === 'wireframe') {
             mat.wireframe = true;
           } else if (mode === 'non-shaded') {
@@ -105,7 +113,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       }
     });
-  }, [sceneRef]);
+  }, [sceneRef]); // sceneRef is stable but included as it's accessed
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -115,7 +123,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     const scene = new Scene(engine);
     sceneRef.current = scene;
 
-    scene.clearColor = new Color4(0, 0, 0, 0);
+    scene.clearColor = new Color4(0, 0, 0, 0); // Transparent background for the canvas
 
     const camera = new ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, Vector3.Zero(), scene);
     camera.attachControl(canvasRef.current, true);
@@ -132,8 +140,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     gridMaterial.majorUnitFrequency = 10;
     gridMaterial.minorUnitVisibility = 0.45;
     gridMaterial.gridRatio = 1;
-    gridMaterial.mainColor = Color3.FromHexString("#545454");
-    gridMaterial.lineColor = Color3.FromHexString("#5F5F5F");
+    gridMaterial.mainColor = Color3.FromHexString("#545454"); 
+    gridMaterial.lineColor = Color3.FromHexString("#5F5F5F"); 
     gridMaterial.opacity = 0.98;
     gridMaterial.useMaxLine = true;
     ground.material = gridMaterial;
@@ -163,7 +171,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       if (sceneRef.current) {
         const gridMesh = sceneRef.current.getMeshByName("grid");
         if (gridMesh) {
-            gridMesh.dispose(false, true);
+            gridMesh.dispose(false, true); 
         }
         sceneRef.current.dispose();
         sceneRef.current = null;
@@ -179,13 +187,22 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     const scene = sceneRef.current;
     if (!scene || !onModelLoaded) return;
 
-    setIsCurrentModelActuallyLoaded(false);
+    setIsCurrentModelActuallyLoaded(false); // Reset flag for new model
     if (onModelHierarchyReady) onModelHierarchyReady([]);
 
+
     if (loadedAssetContainerRef.current) {
+      // Dispose previous model's edges renderers first if they exist
+      loadedAssetContainerRef.current.meshes.forEach(mesh => {
+        if (mesh.edgesRenderer) {
+          mesh.disableEdgesRendering(); // Ensure renderer is disabled before disposal
+        }
+      });
       loadedAssetContainerRef.current.dispose();
       loadedAssetContainerRef.current = null;
     }
+    
+    const grid = scene.getMeshByName("grid");
 
     if (!modelUrl) {
         const camera = scene.activeCamera as ArcRotateCamera;
@@ -195,7 +212,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             camera.alpha = -Math.PI / 2;
             camera.beta = Math.PI / 2.5;
         }
-        const grid = scene.getMeshByName("grid");
         if (grid) grid.setEnabled(true);
         return;
     }
@@ -204,15 +220,14 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
     const pluginExtension = isDataUrl ? modelFileExtension || undefined : undefined;
 
-    const gridMesh = scene.getMeshByName("grid");
-    if (gridMesh) gridMesh.setEnabled(false);
+    if (grid) grid.setEnabled(false);
 
 
     SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginExtension)
       .then(container => {
         loadedAssetContainerRef.current = container;
         container.addAllToScene();
-        if (gridMesh) gridMesh.setEnabled(true);
+        if (grid) grid.setEnabled(true);
 
         if (container.meshes.length > 0 && scene.activeCamera) {
           const camera = scene.activeCamera as ArcRotateCamera;
@@ -221,7 +236,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
           container.meshes.forEach((mesh: AbstractMesh) => {
             if (mesh.name === "grid") return;
-            mesh.computeWorldMatrix(true);
+            mesh.computeWorldMatrix(true); 
             const boundingInfo = mesh.getBoundingInfo();
             if (boundingInfo) {
               const meshMin = boundingInfo.boundingBox.minimumWorld;
@@ -230,43 +245,43 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
               max = Vector3.Maximize(max, meshMax);
             }
           });
-
+          
           if (min.x !== Infinity) {
             const center = Vector3.Center(min, max);
             camera.setTarget(center);
 
             const modelSize = Vector3.Distance(min, max);
-            camera.radius = Math.max(modelSize * 1.2, 1);
-            if (camera.radius === 0) camera.radius = 10;
+            camera.radius = Math.max(modelSize * 1.2, 1); 
+            if(camera.radius === 0) camera.radius = 10; // safety net
 
-            const ground = scene.getMeshByName("grid");
-            if(ground) {
-                ground.position.y = min.y - 0.01;
+            const groundMesh = scene.getMeshByName("grid");
+            if(groundMesh) {
+                groundMesh.position.y = min.y - 0.01; // Position grid slightly below the model
             }
 
           } else {
              camera.setTarget(Vector3.Zero());
-             camera.radius = 10;
-             const ground = scene.getMeshByName("grid");
-             if (ground) ground.position.y = 0;
+             camera.radius = 10; 
+             const groundMesh = scene.getMeshByName("grid");
+             if(groundMesh) groundMesh.position.y = 0;
           }
         }
         onModelLoaded(true);
-        setIsCurrentModelActuallyLoaded(true);
+        setIsCurrentModelActuallyLoaded(true); // Set flag after successful load and setup
 
         if (onModelHierarchyReady) {
           const buildNodeHierarchy = (babylonNode: Node): ModelNode => {
             let nodeType = "Node";
             if (babylonNode instanceof Mesh) nodeType = "Mesh";
             else if (babylonNode instanceof TransformNode) nodeType = "TransformNode";
-
+            
             const children = (babylonNode.getChildren ? babylonNode.getChildren() : [])
-                .filter(child =>
-                    child.getScene() === scene &&
-                    !(child instanceof HemisphericLight) &&
+                .filter(child => 
+                    child.getScene() === scene && // Ensure it's part of the main scene
+                    !(child instanceof HemisphericLight) && 
                     !(child instanceof ArcRotateCamera) &&
-                    child.name !== "grid" &&
-                    !(child.name.startsWith("__") && child.name.endsWith("__"))
+                    child.name !== "grid" && // Exclude the grid
+                    !(child.name.startsWith("__") && child.name.endsWith("__")) // Exclude Babylon internal nodes
                 )
                 .map(buildNodeHierarchy);
 
@@ -277,23 +292,23 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
               children: children,
             };
           };
-
+          
           const hierarchyRoots: ModelNode[] = container.rootNodes
-            .filter(node =>
+            .filter(node => 
                 node.name !== "grid" &&
-                node.name !== "camera" &&
+                node.name !== "camera" && 
                 !node.name.startsWith("light") &&
                 !(node.name.startsWith("__") && node.name.endsWith("__")) &&
-                !(node instanceof HemisphericLight) &&
+                !(node instanceof HemisphericLight) && 
                 !(node instanceof ArcRotateCamera)
             )
             .map(buildNodeHierarchy);
-
+            
           onModelHierarchyReady(hierarchyRoots);
         }
-        // Apply initial rendering mode and overlay after model is loaded
+        // Initial style application after model load
         applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
-        applyMeshOverlay(loadedAssetContainerRef.current, wireframeOverlayEnabled);
+        toggleWireframeEdges(loadedAssetContainerRef.current, wireframeOverlayEnabled);
 
       })
       .catch(error => {
@@ -311,29 +326,29 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
         onModelLoaded(false, userMessage);
         setIsCurrentModelActuallyLoaded(false);
-        if (gridMesh) gridMesh.setEnabled(true);
-        if (loadedAssetContainerRef.current) {
+        if (grid) grid.setEnabled(true); // Re-enable grid on error
+        if (loadedAssetContainerRef.current) { // Clean up failed load attempt
             loadedAssetContainerRef.current.dispose();
             loadedAssetContainerRef.current = null;
         }
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, applyMeshOverlay, renderingMode, wireframeOverlayEnabled]);
-  // Added renderingMode, wireframeOverlayEnabled, applyRenderingModeStyle, applyMeshOverlay to ensure these functions are called with current props on model load
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, renderingMode, wireframeOverlayEnabled, applyRenderingModeStyle, toggleWireframeEdges]);
+  // Removed renderingMode, wireframeOverlayEnabled, applyRenderingModeStyle, toggleWireframeEdges from here
+  // as they are handled by the effect below or applied once after load
+
 
   useEffect(() => {
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
       // When rendering mode changes, ensure overlay is re-applied based on its current state
-      applyMeshOverlay(loadedAssetContainerRef.current, wireframeOverlayEnabled);
+      toggleWireframeEdges(loadedAssetContainerRef.current, wireframeOverlayEnabled);
     }
-  }, [renderingMode, wireframeOverlayEnabled, isCurrentModelActuallyLoaded, applyRenderingModeStyle, applyMeshOverlay]);
+  }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle, wireframeOverlayEnabled, toggleWireframeEdges]);
+  // This effect is for re-applying styles if renderingMode or wireframeOverlayEnabled props change *after* a model is loaded.
+  // Adding wireframeOverlayEnabled and toggleWireframeEdges here.
 
-  useEffect(() => {
-    if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
-      applyMeshOverlay(loadedAssetContainerRef.current, wireframeOverlayEnabled);
-    }
-  }, [wireframeOverlayEnabled, isCurrentModelActuallyLoaded, applyMeshOverlay]); // This hook is specifically for overlay toggle
+  // No specific useEffect for only wireframeOverlayEnabled is needed if the above handles it.
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
