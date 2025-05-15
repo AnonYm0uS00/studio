@@ -10,6 +10,8 @@ import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, Slide
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
+import { ModelHierarchyView } from '@/components/model-hierarchy-view';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
 export default function Home() {
@@ -23,6 +25,10 @@ export default function Home() {
   const { toast } = useToast();
   
   const [modelName, setModelName] = useState<string | null>(null);
+  const [modelHierarchy, setModelHierarchy] = useState<ModelNode[]>([]);
+  const [renderingMode, setRenderingMode] = useState<RenderingMode>('shaded');
+  const [currentFps, setCurrentFps] = useState<number>(0);
+
 
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -37,6 +43,7 @@ export default function Home() {
       setError(null);
       setIsLoading(true);
       setSubmittedModelUrl(null); 
+      setModelHierarchy([]);
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -59,6 +66,7 @@ export default function Home() {
       setSubmittedModelUrl(null);
       setModelFileExtension(null);
       setModelName(null);
+      setModelHierarchy([]);
     }
   };
 
@@ -67,13 +75,24 @@ export default function Home() {
     if (!success) {
       setError(errorMessage || "Failed to load model.");
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (GLB, GLTF, OBJ).", variant: "destructive" });
+      setModelHierarchy([]);
     } else {
       setError(null); 
+      // Toast for successful load is now handled by the re-render if needed, or can be added here explicitly if desired for every load
+      // For now, let's keep it silent on success to avoid toasts on rendering mode changes.
     }
   }, [toast]);
 
   const handleCameraReady = useCallback((camera: ArcRotateCamera) => {
     cameraRef.current = camera;
+  }, []);
+
+  const handleModelHierarchyReady = useCallback((hierarchy: ModelNode[]) => {
+    setModelHierarchy(hierarchy);
+  }, []);
+  
+  const handleFpsUpdate = useCallback((fps: number) => {
+    setCurrentFps(Math.round(fps));
   }, []);
 
 
@@ -130,12 +149,26 @@ export default function Home() {
               ) : modelName && !error ? (
                  <div className="p-2 space-y-1">
                     <p className="text-sm font-semibold text-foreground">Name: <span className="font-normal text-muted-foreground">{modelName}</span></p>
-                    <p className="text-sm font-semibold text-foreground">Path: <span className="font-normal text-muted-foreground break-all">{modelName}</span></p>
+                    <p className="text-sm font-semibold text-foreground">Path: <span className="font-normal text-muted-foreground break-all">{selectedFileName}</span></p>
                  </div>
               ) : null }
             </TabsContent>
-            <TabsContent value="scene" className="flex-grow mt-3">
-              <p className="text-sm text-muted-foreground italic p-2">Scene details will be implemented later.</p>
+            <TabsContent value="scene" className="flex-grow mt-3 overflow-y-auto">
+               {modelHierarchy.length > 0 ? (
+                <ul className="space-y-0.5">
+                  {modelHierarchy.map(node => (
+                    <ModelHierarchyView key={node.id} node={node} defaultOpen={true} />
+                  ))}
+                </ul>
+              ) : submittedModelUrl && !isLoading && !error ? (
+                 <p className="text-sm text-muted-foreground italic p-2">Model loaded, but no hierarchy data to display or model is empty.</p>
+              ) : !isLoading && !error && (
+                <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                  <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
+                  <p className="text-sm font-medium text-foreground">No model loaded</p>
+                  <p className="text-xs text-muted-foreground">The scene hierarchy will appear here.</p>
+                </div>
+              )}
             </TabsContent>
             <TabsContent value="materials" className="flex-grow mt-3">
               <p className="text-sm text-muted-foreground italic p-2">Material details will be implemented later.</p>
@@ -174,6 +207,9 @@ export default function Home() {
                   modelFileExtension={modelFileExtension}
                   onModelLoaded={handleModelLoaded}
                   onCameraReady={handleCameraReady}
+                  renderingMode={renderingMode}
+                  onFpsUpdate={handleFpsUpdate}
+                  onModelHierarchyReady={handleModelHierarchyReady}
               />
             )}
 
@@ -202,6 +238,38 @@ export default function Home() {
                     Try a different file
                 </Button>
                 </div>
+            )}
+             {/* Rendering Mode Toggles & FPS Display - only when model is loaded and no error */}
+            {submittedModelUrl && !isLoading && !error && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 p-2 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md">
+                <Button
+                  variant={renderingMode === 'shaded' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setRenderingMode('shaded')}
+                  className="text-xs h-7 px-2"
+                >
+                  Shaded
+                </Button>
+                <Button
+                  variant={renderingMode === 'non-shaded' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setRenderingMode('non-shaded')}
+                  className="text-xs h-7 px-2"
+                >
+                  Non-Shaded
+                </Button>
+                <Button
+                  variant={renderingMode === 'wireframe' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setRenderingMode('wireframe')}
+                  className="text-xs h-7 px-2"
+                >
+                  Wireframe
+                </Button>
+                 <div className="ml-2 text-xs text-muted-foreground border-l border-border pl-2">
+                    FPS: {currentFps}
+                </div>
+              </div>
             )}
         </main>
       </div>
