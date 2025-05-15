@@ -2,10 +2,10 @@
 'use client';
 import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
-import { Vector3 } from '@babylonjs/core';
+// import { Vector3 } from '@babylonjs/core'; // Not used directly in page.tsx anymore for camera controls
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { BabylonViewer, type RenderingMode } from '@/components/babylon-viewer';
+import { BabylonViewer } from '@/components/babylon-viewer';
 import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,9 +23,11 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 
 type Theme = "light" | "dark" | "system";
+type EffectiveTheme = "light" | "dark";
 
 export default function Home() {
   const [submittedModelUrl, setSubmittedModelUrl] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export default function Home() {
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cameraRef = useRef<ArcRotateCamera | null>(null);
+  const cameraRef = useRef<ArcRotateCamera | null>(null); // Retain for potential future use, though not directly manipulated from here
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   
@@ -44,37 +46,53 @@ export default function Home() {
   const [nearClip, setNearClip] = useState<number>(0.1);
   const [farClip, setFarClip] = useState<number>(2000);
   const [theme, setTheme] = useState<Theme>("system");
+  const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>('light');
+
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("theme") as Theme | null;
+    const initialSystemIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
     if (storedTheme) {
-      setTheme(storedTheme);
+        setTheme(storedTheme); // This will trigger the other useEffect to set effectiveTheme
+    } else { // No stored theme, use system
+        setTheme('system'); // This will trigger the other useEffect to set effectiveTheme
+    }
+    // Set initial effective theme based on what will be applied
+     if (storedTheme === 'dark' || (!storedTheme && initialSystemIsDark)) {
+      setEffectiveTheme('dark');
+    } else {
+      setEffectiveTheme('light');
     }
   }, []);
 
   useEffect(() => {
-    const applyTheme = (chosenTheme: Theme) => {
-      if (
-        chosenTheme === "dark" ||
-        (chosenTheme === "system" &&
-          window.matchMedia("(prefers-color-scheme: dark)").matches)
-      ) {
+    const applySystemTheme = () => {
+      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
         document.documentElement.classList.add("dark");
-        if (chosenTheme === 'dark') localStorage.setItem("theme", "dark");
-        else localStorage.removeItem("theme");
-
+        setEffectiveTheme('dark');
       } else {
         document.documentElement.classList.remove("dark");
-        if (chosenTheme === 'light') localStorage.setItem("theme", "light");
-        else localStorage.removeItem("theme");
+        setEffectiveTheme('light');
       }
     };
 
-    applyTheme(theme);
+    if (theme === "light") {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+      setEffectiveTheme('light');
+    } else if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+      setEffectiveTheme('dark');
+    } else { // system
+      localStorage.removeItem("theme");
+      applySystemTheme(); 
 
-    if (theme === "system") {
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      const handleChange = () => applyTheme("system");
+      const handleChange = () => {
+          applySystemTheme();
+      };
       mediaQuery.addEventListener("change", handleChange);
       return () => mediaQuery.removeEventListener("change", handleChange);
     }
@@ -129,6 +147,7 @@ export default function Home() {
       setModelHierarchy([]);
     } else {
       setError(null); 
+      // Toast for successful load is removed to prevent repetition. Could be re-added if desired for first load only.
     }
   }, [toast]);
 
@@ -303,7 +322,8 @@ export default function Home() {
                         <p className="text-xs text-muted-foreground">
                             Supported formats: .glb, .gltf, .obj
                         </p>
-                        <Button variant="link" size="sm" className="mt-2 text-accent invisible"> {/* Hidden but keeps structure */}
+                         {/* Hidden button, onClick handled by parent div */}
+                        <Button variant="link" size="sm" className="mt-2 text-accent invisible">
                           Or click to select a file
                         </Button>
                     </div>
@@ -320,6 +340,7 @@ export default function Home() {
                   onModelHierarchyReady={handleModelHierarchyReady}
                   nearClip={nearClip}
                   farClip={farClip}
+                  effectiveTheme={effectiveTheme}
               />
             )}
 
@@ -352,7 +373,6 @@ export default function Home() {
                 </div>
             )}
             
-            {/* Viewport Controls - only when model is loaded and no error */}
             {submittedModelUrl && !isLoading && !error && (
               <>
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card/80 backdrop-blur-md rounded-md border border-border shadow-md text-xs text-muted-foreground">
@@ -373,4 +393,3 @@ export default function Home() {
   );
 }
     
-
