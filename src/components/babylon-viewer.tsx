@@ -15,15 +15,15 @@ import {
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF'; // For GLTF/GLB support
 import '@babylonjs/loaders/OBJ';  // For OBJ support
-// FBX support was removed due to import issues.
 
 interface BabylonViewerProps {
-  modelUrl: string | null; // Can now be a Data URL or an http(s) URL
+  modelUrl: string | null;
+  modelFileExtension: string | null; // To hint file type for data URIs
   onModelLoaded: (success: boolean, error?: string) => void;
   onCameraReady: (camera: ArcRotateCamera) => void;
 }
 
-export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelLoaded, onCameraReady }) => {
+export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, modelFileExtension, onModelLoaded, onCameraReady }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Nullable<Engine>>(null);
   const sceneRef = useRef<Nullable<Scene>>(null);
@@ -73,7 +73,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
         engineRef.current.dispose();
         engineRef.current = null;
       }
-       // Clean up asset container on component unmount or before loading new model
       if (loadedAssetContainerRef.current) {
         loadedAssetContainerRef.current.dispose();
         loadedAssetContainerRef.current = null;
@@ -85,13 +84,11 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
     const scene = sceneRef.current;
     if (!scene) return;
 
-    // Dispose previous model
     if (loadedAssetContainerRef.current) {
       loadedAssetContainerRef.current.dispose();
       loadedAssetContainerRef.current = null;
     }
     
-    // If modelUrl is null (e.g. no file selected yet, or file cleared), clear the scene and reset camera
     if (!modelUrl) {
         const camera = scene.activeCamera as ArcRotateCamera;
         if (camera) {
@@ -100,21 +97,17 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
             camera.alpha = -Math.PI / 2;
             camera.beta = Math.PI / 2.5;
         }
-        // Call onModelLoaded with success:true but no model to clear any previous error states in parent
         onModelLoaded(true, undefined); 
         return;
     }
 
-    // Determine if the modelUrl is a Data URL
     const isDataUrl = modelUrl.startsWith('data:');
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
     
-    // For Data URLs, the file extension needs to be hinted for some loaders (especially OBJ with MTLs)
-    // However, LoadAssetContainerAsync usually infers this well.
-    // We pass an empty string for the scene filename when it's a Data URL.
-    const sceneFilename = isDataUrl ? "" : undefined;
+    // For Data URLs, pass the file extension hint. For regular URLs, it can often be inferred.
+    const pluginHint = isDataUrl ? (modelFileExtension || undefined) : undefined;
 
-    SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, sceneFilename ? undefined : ".glb") // Provide a hint if no filename from URL
+    SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginHint)
       .then(container => {
         loadedAssetContainerRef.current = container;
         container.addAllToScene();
@@ -157,15 +150,15 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
         } else if (typeof error === 'string') {
             userMessage = error;
         }
-        // Try to give a more specific error for common issues
-        if (modelUrl.includes('.obj') && !isDataUrl) { // check includes for data URLs
+        // Add advice for OBJ if it's an OBJ file and not a data URL (where MTL issues are harder to debug for user)
+        if (modelFileExtension === '.obj' && !isDataUrl) {
              userMessage += " For OBJ files, ensure any .mtl material files and textures are accessible (usually in the same directory or correctly referenced).";
         }
 
         onModelLoaded(false, userMessage);
       });
 
-  }, [modelUrl, onModelLoaded, sceneRef]); // Ensure sceneRef is a dependency if its current value is used
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef]);
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };

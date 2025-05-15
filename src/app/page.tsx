@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const [submittedModelUrl, setSubmittedModelUrl] = useState<string | null>(null);
+  const [modelFileExtension, setModelFileExtension] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +22,10 @@ export default function Home() {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFileName(file.name);
+      const nameParts = file.name.split('.');
+      const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
+      setModelFileExtension(ext);
+      
       setError(null);
       setIsLoading(true);
       setSubmittedModelUrl(null); // Clear previous model
@@ -44,6 +49,7 @@ export default function Home() {
     } else {
       setSelectedFileName(null);
       setSubmittedModelUrl(null);
+      setModelFileExtension(null);
     }
   };
 
@@ -70,7 +76,7 @@ export default function Home() {
 
   const panCamera = (axis: 'x' | 'y', amount: number) => {
     if (cameraRef.current) {
-      const panSpeed = cameraRef.current.radius * 0.02;
+      const panSpeed = cameraRef.current.radius * 0.02; // Adjust pan speed based on camera distance
       const direction = cameraRef.current.getDirection(axis === 'x' ? new BABYLON.Vector3(1,0,0) : new BABYLON.Vector3(0,1,0));
       cameraRef.current.target.addInPlace(direction.scale(amount * panSpeed));
     }
@@ -114,6 +120,7 @@ export default function Home() {
       <main className="flex-grow relative">
         <BabylonViewer
           modelUrl={submittedModelUrl}
+          modelFileExtension={modelFileExtension}
           onModelLoaded={handleModelLoaded}
           onCameraReady={handleCameraReady}
         />
