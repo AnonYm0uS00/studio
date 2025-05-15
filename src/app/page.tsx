@@ -6,7 +6,7 @@ import { Vector3 } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer, type RenderingMode } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon, SplineIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
@@ -27,6 +27,7 @@ export default function Home() {
   const [modelHierarchy, setModelHierarchy] = useState<ModelNode[]>([]);
   const [renderingMode, setRenderingMode] = useState<RenderingMode>('shaded');
   const [currentFps, setCurrentFps] = useState<number>(0);
+  const [showWireframeOverlay, setShowWireframeOverlay] = useState<boolean>(false);
 
 
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
@@ -77,6 +78,8 @@ export default function Home() {
       setModelHierarchy([]);
     } else {
       setError(null); 
+      // Do not show success toast here, as it was too frequent. 
+      // User knows it's loaded when it appears.
     }
   }, [toast]);
 
@@ -101,7 +104,7 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* Top Bar */}
-      <header className="h-12 flex-shrink-0 border-b border-border bg-card flex items-center px-4 justify-between shadow-md">
+      <header className="h-12 flex-shrink-0 border-b border-border bg-card/70 backdrop-blur-md flex items-center px-4 justify-between shadow-md">
         <h1 className="text-lg font-semibold text-primary">3D Viewer</h1>
         <div className="text-sm text-muted-foreground">{modelName || "No model loaded"}</div>
         <div className="flex items-center gap-2">
@@ -122,7 +125,7 @@ export default function Home() {
 
       <div className="flex flex-row flex-grow overflow-hidden"> 
         {/* Left Panel ("Model Explorer") */}
-        <aside className="w-72 bg-card border-r border-border flex flex-col p-0 shadow-lg">
+        <aside className="w-72 bg-card/70 backdrop-blur-md border-r border-border flex flex-col p-0 shadow-lg">
           <div className="p-3 border-b border-border flex items-center justify-between h-12">
             <h2 className="text-sm font-semibold text-primary">Model Explorer</h2>
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-7 w-7">
@@ -186,7 +189,7 @@ export default function Home() {
             {!submittedModelUrl && !isLoading && !error && (
                 <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
                     <div 
-                        className="flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer"
+                        className="flex flex-col items-center justify-center p-10 bg-card/70 backdrop-blur-md rounded-lg shadow-xl border border-border cursor-pointer"
                         onClick={triggerFileDialog}
                     >
                         <div className="flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4">
@@ -212,11 +215,12 @@ export default function Home() {
                   renderingMode={renderingMode}
                   onFpsUpdate={handleFpsUpdate}
                   onModelHierarchyReady={handleModelHierarchyReady}
+                  wireframeOverlayEnabled={showWireframeOverlay}
               />
             )}
 
             {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-30 backdrop-blur-sm">
+                <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-30">
                   <div className="flex flex-col items-center bg-card p-8 rounded-lg shadow-xl">
                       <svg className="animate-spin h-10 w-10 text-primary mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -229,7 +233,7 @@ export default function Home() {
             )}
 
             {!isLoading && error && ( 
-                <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-20 p-4 backdrop-blur-sm">
+                <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-20 p-4">
                   <div className="bg-card p-8 rounded-lg shadow-xl text-center max-w-md">
                     <AlertTriangle className="w-16 h-16 text-destructive mb-4 mx-auto" />
                     <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Model</h2>
@@ -244,17 +248,30 @@ export default function Home() {
                 </div>
             )}
             
-            {/* FPS Display - only when model is loaded and no error */}
+            {/* Viewport Controls - only when model is loaded and no error */}
             {submittedModelUrl && !isLoading && !error && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card rounded-md border border-border shadow-md text-xs text-muted-foreground">
-                 FPS: {currentFps}
-              </div>
+              <>
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card/80 backdrop-blur-md rounded-md border border-border shadow-md text-xs text-muted-foreground">
+                  FPS: {currentFps}
+                </div>
+                <div className="absolute top-4 right-4 z-10">
+                  <Button 
+                    variant={showWireframeOverlay ? "default" : "outline"} 
+                    size="icon" 
+                    onClick={() => setShowWireframeOverlay(!showWireframeOverlay)}
+                    className="bg-card/70 backdrop-blur-md hover:bg-accent hover:text-accent-foreground"
+                    title={showWireframeOverlay ? "Hide Wireframe Overlay" : "Show Wireframe Overlay"}
+                  >
+                    <SplineIcon className="h-5 w-5" />
+                  </Button>
+                </div>
+              </>
             )}
         </main>
       </div>
 
       {/* Bottom Bar */}
-      <footer className="h-8 flex-shrink-0 border-t border-border bg-card flex items-center px-4 shadow-md">
+      <footer className="h-8 flex-shrink-0 border-t border-border bg-card/70 backdrop-blur-md flex items-center px-4 shadow-md">
         <p className="text-xs text-muted-foreground">
             {isLoading ? "Loading model..." : error ? "Error loading model" : submittedModelUrl ? `Viewing: ${modelName}` : "Ready to load model"}
         </p>

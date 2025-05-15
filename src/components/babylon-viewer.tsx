@@ -18,9 +18,9 @@ import {
   PBRMaterial, 
   StandardMaterial,
   MultiMaterial,
-  Node, // Import Node
-  TransformNode, // Import TransformNode
-  Mesh // Import Mesh for instanceof checks
+  Node, 
+  TransformNode, 
+  Mesh 
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF'; 
@@ -37,6 +37,7 @@ interface BabylonViewerProps {
   onFpsUpdate?: (fps: number) => void;
   renderingMode: RenderingMode;
   onModelHierarchyReady?: (hierarchy: ModelNode[]) => void;
+  wireframeOverlayEnabled?: boolean;
 }
 
 export const BabylonViewer: React.FC<BabylonViewerProps> = ({ 
@@ -46,7 +47,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   onCameraReady,
   onFpsUpdate,
   renderingMode,
-  onModelHierarchyReady
+  onModelHierarchyReady,
+  wireframeOverlayEnabled = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Nullable<Engine>>(null);
@@ -54,17 +56,28 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   const loadedAssetContainerRef = useRef<Nullable<AssetContainer>>(null);
   const [isCurrentModelActuallyLoaded, setIsCurrentModelActuallyLoaded] = useState(false);
 
+  const applyMeshOverlay = useCallback((container: Nullable<AssetContainer>, enabled: boolean) => {
+    if (!container) return;
+    container.meshes.forEach((mesh: AbstractMesh) => {
+      if (mesh.name === "grid") return; // Skip grid
+      mesh.renderOverlay = enabled;
+      if (enabled) {
+        mesh.overlayColor = Color3.White(); // Or any other color you prefer
+        mesh.overlayAlpha = 0.2; // Adjust for desired intensity
+      }
+    });
+  }, []);
+
   const applyRenderingModeStyle = useCallback((mode: RenderingMode, container: Nullable<AssetContainer>) => {
     if (!container || !sceneRef.current) return;
 
     container.meshes.forEach((mesh: AbstractMesh) => {
-      if (mesh.name === "grid") { // Explicitly skip the grid mesh
+      if (mesh.name === "grid") { 
         return;
       }
 
       if (mesh.material) {
         const processMaterial = (mat: Material) => {
-          // Defaults for 'shaded'
           mat.wireframe = false;
           if (mat instanceof PBRMaterial) {
             mat.unlit = false; 
@@ -72,7 +85,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             mat.disableLighting = false;
           }
 
-          // Apply specific mode
           if (mode === 'wireframe') {
             mat.wireframe = true;
           } else if (mode === 'non-shaded') {
@@ -120,13 +132,13 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     gridMaterial.majorUnitFrequency = 10;
     gridMaterial.minorUnitVisibility = 0.45;
     gridMaterial.gridRatio = 1;
-    gridMaterial.mainColor = Color3.FromHexString("#545454"); // Area between lines - made lighter
-    gridMaterial.lineColor = Color3.FromHexString("#5F5F5F"); // Major grid lines - made lighter
+    gridMaterial.mainColor = Color3.FromHexString("#545454"); 
+    gridMaterial.lineColor = Color3.FromHexString("#5F5F5F"); 
     gridMaterial.opacity = 0.98;
     gridMaterial.useMaxLine = true;
     ground.material = gridMaterial;
     ground.isPickable = false;
-    ground.position.y = 0; // Ensure grid is at y=0
+    ground.position.y = 0; 
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -149,10 +161,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     return () => {
       resizeObserver.disconnect();
       if (sceneRef.current) {
-        // Dispose of meshes and materials created in this effect
         const gridMesh = sceneRef.current.getMeshByName("grid");
         if (gridMesh) {
-            gridMesh.dispose(false, true); // Dispose mesh and its material
+            gridMesh.dispose(false, true); 
         }
         sceneRef.current.dispose(); 
         sceneRef.current = null;
@@ -184,7 +195,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             camera.alpha = -Math.PI / 2;
             camera.beta = Math.PI / 2.5;
         }
-        // Ensure grid is visible even if no model is loaded
         const grid = scene.getMeshByName("grid");
         if (grid) grid.setEnabled(true);
         return;
@@ -194,7 +204,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
     const pluginExtension = modelFileExtension || undefined; 
 
-    // Hide grid while loading new model to avoid flicker if model is large
     const gridMesh = scene.getMeshByName("grid");
     if (gridMesh) gridMesh.setEnabled(false);
 
@@ -203,16 +212,15 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       .then(container => {
         loadedAssetContainerRef.current = container;
         container.addAllToScene();
-        if (gridMesh) gridMesh.setEnabled(true); // Show grid again
+        if (gridMesh) gridMesh.setEnabled(true); 
         
         if (container.meshes.length > 0 && scene.activeCamera) {
           const camera = scene.activeCamera as ArcRotateCamera;
-          // Calculate bounding box of the loaded model
           let min = new Vector3(Infinity, Infinity, Infinity);
           let max = new Vector3(-Infinity, -Infinity, -Infinity);
 
           container.meshes.forEach((mesh: AbstractMesh) => {
-            // Ensure world matrix is computed for accurate bounding info
+            if (mesh.name === "grid") return;
             mesh.computeWorldMatrix(true); 
             const boundingInfo = mesh.getBoundingInfo();
             if (boundingInfo) {
@@ -223,26 +231,24 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             }
           });
           
-          if (min.x !== Infinity) { // Check if any bounds were actually computed
+          if (min.x !== Infinity) { 
             const center = Vector3.Center(min, max);
             camera.setTarget(center);
 
             const modelSize = Vector3.Distance(min, max);
-            camera.radius = Math.max(modelSize * 1.2, 1); // Ensure radius is not too small
-            if (camera.radius === 0) camera.radius = 10; // Fallback if size is 0
+            camera.radius = Math.max(modelSize * 1.2, 1); 
+            if (camera.radius === 0) camera.radius = 10; 
             
-            // Adjust grid position to be slightly below the model's lowest point if model is not at y=0
             const ground = scene.getMeshByName("grid");
             if(ground) {
-                ground.position.y = min.y - 0.01; // Place grid slightly below the model
+                ground.position.y = min.y - 0.01; 
             }
 
           } else {
-             // Fallback if model has no clear bounds (e.g. empty GLTF)
              camera.setTarget(Vector3.Zero());
              camera.radius = 10;
              const ground = scene.getMeshByName("grid");
-             if (ground) ground.position.y = 0; // Reset grid to origin
+             if (ground) ground.position.y = 0; 
           }
         }
         onModelLoaded(true);
@@ -260,7 +266,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     !(child instanceof HemisphericLight) && 
                     !(child instanceof ArcRotateCamera) && 
                     child.name !== "grid" &&
-                    !(child.name.startsWith("__") && child.name.endsWith("__")) // Filter out typical root nodes from GLTF
+                    !(child.name.startsWith("__") && child.name.endsWith("__")) 
                 ) 
                 .map(buildNodeHierarchy);
         
@@ -277,7 +283,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                 node.name !== "grid" && 
                 node.name !== "camera" && 
                 !node.name.startsWith("light") && 
-                !(node.name.startsWith("__") && node.name.endsWith("__")) && // Common for internal/root nodes of GLTF
+                !(node.name.startsWith("__") && node.name.endsWith("__")) && 
                 !(node instanceof HemisphericLight) &&
                 !(node instanceof ArcRotateCamera)
             )
@@ -285,7 +291,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         
           onModelHierarchyReady(hierarchyRoots);
         }
-
+        // Apply initial rendering mode and overlay after model is loaded
+        applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
+        applyMeshOverlay(loadedAssetContainerRef.current, wireframeOverlayEnabled);
 
       })
       .catch(error => {
@@ -303,20 +311,26 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
         onModelLoaded(false, userMessage);
         setIsCurrentModelActuallyLoaded(false);
-        if (gridMesh) gridMesh.setEnabled(true); // Show grid again even if model fails
-        if (loadedAssetContainerRef.current) { // Ensure previous container is disposed if new load fails
+        if (gridMesh) gridMesh.setEnabled(true); 
+        if (loadedAssetContainerRef.current) { 
             loadedAssetContainerRef.current.dispose();
             loadedAssetContainerRef.current = null;
         }
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady]); 
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, renderingMode, wireframeOverlayEnabled, applyRenderingModeStyle, applyMeshOverlay]); 
 
   useEffect(() => {
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
     }
   }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle]); 
+
+  useEffect(() => {
+    if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
+      applyMeshOverlay(loadedAssetContainerRef.current, wireframeOverlayEnabled);
+    }
+  }, [wireframeOverlayEnabled, isCurrentModelActuallyLoaded, applyMeshOverlay]);
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
