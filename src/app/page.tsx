@@ -32,8 +32,8 @@ export default function Home() {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFileName(file.name);
-      setModelName(file.name); // Set model name for the details panel
-      setModelHierarchy(null); // Reset hierarchy on new file selection
+      setModelName(file.name); 
+      setModelHierarchy(null); 
 
       const nameParts = file.name.split('.');
       const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
@@ -72,7 +72,7 @@ export default function Home() {
     setIsLoading(false);
     if (!success) {
       setError(errorMessage || "Failed to load model.");
-      setModelHierarchy(null); // Clear hierarchy on load error
+      setModelHierarchy(null); 
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (GLB, GLTF, OBJ).", variant: "destructive" });
     } else {
       setError(null); 
@@ -213,18 +213,7 @@ export default function Home() {
                 <AccordionTrigger>Object</AccordionTrigger>
                 <AccordionContent>
                   {modelName && <p className="font-semibold mb-1 text-foreground">Name: <span className="font-normal text-muted-foreground">{modelName}</span></p>}
-                  {modelHierarchy && modelHierarchy.length > 0 ? (
-                    <>
-                      <h3 className="font-semibold mt-3 mb-1 text-foreground">Hierarchy:</h3>
-                      <ul className="list-none p-0 space-y-1 max-h-96 overflow-y-auto">
-                        {modelHierarchy.map(node => <ModelHierarchyView key={node.id} node={node} defaultOpen={modelHierarchy.length === 1} />)}
-                      </ul>
-                    </>
-                  ) : modelName ? (
-                     <p className="text-sm text-muted-foreground italic mt-2">No hierarchy data was extracted from the model, or the model has no nested structure.</p>
-                  ): (
-                    <p className="text-sm text-muted-foreground italic">No model loaded or hierarchy data available.</p>
-                  )}
+                  {!modelName && <p className="text-sm text-muted-foreground italic">No model loaded or name available.</p>}
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="materials">
