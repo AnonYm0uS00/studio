@@ -1,6 +1,6 @@
 
 'use client';
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   Engine,
   Scene,
@@ -46,6 +46,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   const engineRef = useRef<Nullable<Engine>>(null);
   const sceneRef = useRef<Nullable<Scene>>(null);
   const loadedAssetContainerRef = useRef<Nullable<AssetContainer>>(null);
+  const [isCurrentModelActuallyLoaded, setIsCurrentModelActuallyLoaded] = useState(false);
 
   const applyRenderingModeStyle = useCallback((mode: RenderingMode, container: Nullable<AssetContainer>) => {
     if (!container || !sceneRef.current) return;
@@ -56,7 +57,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           // General resets
           mat.wireframe = false;
           
-          // Material type specific resets
           if (mat instanceof PBRMaterial) {
             mat.unlit = false;
           } else if (mat instanceof StandardMaterial) {
@@ -85,9 +85,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       }
     });
-  }, [sceneRef]); // sceneRef is stable, this callback is created once
+  }, [sceneRef]); // sceneRef is stable
 
-
+  // Effect for initial scene setup (engine, scene, camera, lights, grid, render loop)
   useEffect(() => {
     if (!canvasRef.current) return;
 
@@ -96,7 +96,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     const scene = new Scene(engine);
     sceneRef.current = scene;
     
-    scene.clearColor = new Color4(0, 0, 0, 0); // Transparent background for canvas
+    scene.clearColor = new Color4(0, 0, 0, 0); 
 
     const camera = new ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, Vector3.Zero(), scene);
     camera.attachControl(canvasRef.current, true);
@@ -113,14 +113,13 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     gridMaterial.majorUnitFrequency = 10;
     gridMaterial.minorUnitVisibility = 0.45;
     gridMaterial.gridRatio = 1;
-    gridMaterial.mainColor = Color3.FromHexString("#333333"); // Dark gray (Maya-like)
-    gridMaterial.lineColor = Color3.FromHexString("#595959"); // Mid-gray (Maya-like)
+    gridMaterial.mainColor = Color3.FromHexString("#333333"); 
+    gridMaterial.lineColor = Color3.FromHexString("#595959"); 
     gridMaterial.opacity = 0.98;
     gridMaterial.useMaxLine = true;
     ground.material = gridMaterial;
     ground.isPickable = false;
     ground.position.y = 0;
-
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -141,26 +140,25 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     return () => {
       resizeObserver.disconnect();
       if (sceneRef.current) {
-        sceneRef.current.dispose();
+        sceneRef.current.dispose(); // This will dispose meshes, materials, lights etc.
         sceneRef.current = null;
       }
       if (engineRef.current) {
         engineRef.current.dispose();
         engineRef.current = null;
       }
-      if (loadedAssetContainerRef.current) {
-        loadedAssetContainerRef.current.dispose();
-        loadedAssetContainerRef.current = null;
-      }
+      // Asset container is disposed in the model loading effect
     };
-  }, [onCameraReady, onFpsUpdate]); // Only depends on callbacks that should be stable
+  }, [onCameraReady, onFpsUpdate]); // Only depends on stable callbacks
 
   // Effect for loading models
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene) return;
+    if (!scene || !onModelLoaded) return; // Ensure onModelLoaded is defined
 
-    // Dispose previous model if any
+    // Reset loaded state when modelUrl or extension changes
+    setIsCurrentModelActuallyLoaded(false);
+
     if (loadedAssetContainerRef.current) {
       loadedAssetContainerRef.current.dispose();
       loadedAssetContainerRef.current = null;
@@ -169,34 +167,33 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if (!modelUrl) {
         const camera = scene.activeCamera as ArcRotateCamera;
         if (camera) {
-            // Reset camera for empty scene
             camera.target = Vector3.Zero();
-            camera.radius = 10; // Default radius
+            camera.radius = 10; 
             camera.alpha = -Math.PI / 2;
             camera.beta = Math.PI / 2.5;
         }
-        onModelLoaded(true, undefined); // Indicate model "unloaded" successfully
+        // Intentionally not calling onModelLoaded for "no model" state to avoid toasts
+        // Or, if a "model cleared" toast is desired, call it here.
+        // For now, let's assume no toast for clearing.
         return;
     }
 
     const isDataUrl = modelUrl.startsWith('data:');
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
-    // Use modelFileExtension as pluginHint for data URLs, otherwise undefined for http(s) URLs
-    const pluginHint = isDataUrl ? (modelFileExtension || undefined) : undefined;
+    const pluginHint = modelFileExtension || undefined; // Use file extension directly as hint
 
     SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginHint)
       .then(container => {
         loadedAssetContainerRef.current = container;
         container.addAllToScene();
         
-        // Auto-focus camera on the loaded model
         if (container.meshes.length > 0 && scene.activeCamera) {
           const camera = scene.activeCamera as ArcRotateCamera;
           let min = new Vector3(Infinity, Infinity, Infinity);
           let max = new Vector3(-Infinity, -Infinity, -Infinity);
 
           container.meshes.forEach((mesh: AbstractMesh) => {
-            mesh.computeWorldMatrix(true); // Ensure world matrix is up to date
+            mesh.computeWorldMatrix(true); 
             const boundingInfo = mesh.getBoundingInfo();
             if (boundingInfo) {
               const meshMin = boundingInfo.boundingBox.minimumWorld;
@@ -206,20 +203,18 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             }
           });
           
-          if (min.x !== Infinity) { // Check if any bounds were actually computed
+          if (min.x !== Infinity) { 
             const center = Vector3.Center(min, max);
             camera.setTarget(center);
             const distance = Vector3.Distance(min, max);
-            camera.radius = Math.max(distance * 1.5, 1); // Ensure radius is not too small
+            camera.radius = Math.max(distance * 1.5, 1); 
           } else {
-             // Fallback if no valid bounding info (e.g., empty model)
              camera.setTarget(Vector3.Zero());
              camera.radius = 10;
           }
         }
-        // Apply the current rendering mode to the newly loaded model
-        applyRenderingModeStyle(renderingMode, container);
-        onModelLoaded(true);
+        onModelLoaded(true); // THIS IS THE SUCCESS TOAST
+        setIsCurrentModelActuallyLoaded(true); // Signal that model is loaded
       })
       .catch(error => {
         console.error("Error loading model:", error);
@@ -229,26 +224,27 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         } else if (typeof error === 'string') {
             userMessage = error;
         }
-        // Specific advice for OBJ data URLs
         if (modelFileExtension === '.obj' && isDataUrl) {
              userMessage += " For OBJ files loaded from local disk, .mtl files and textures are typically not packaged within the .obj data URI and may not load. Consider using GLB format for self-contained models.";
         } else if (modelFileExtension === '.obj' && !isDataUrl) {
              userMessage += " For OBJ files from a URL, ensure any .mtl material files and textures are accessible (usually in the same directory or correctly referenced).";
         }
         onModelLoaded(false, userMessage);
+        setIsCurrentModelActuallyLoaded(false);
+        if (loadedAssetContainerRef.current) { // Clean up if partially loaded
+            loadedAssetContainerRef.current.dispose();
+            loadedAssetContainerRef.current = null;
+        }
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, renderingMode, applyRenderingModeStyle]); // renderingMode and applyRenderingModeStyle are needed here to apply initial mode to new model. 
-                                                                    // onModelLoaded is included as it's part of the loading process. sceneRef is for accessing the scene.
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef]); // Dependencies ONLY related to *what* model to load and reporting.
 
-  // Effect to apply rendering mode when the prop changes for an already loaded model
+  // Effect to apply rendering mode style (when mode changes OR when a new model just finished loading)
   useEffect(() => {
-    if (loadedAssetContainerRef.current) {
+    if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
     }
-  }, [renderingMode, applyRenderingModeStyle]); // Only depends on renderingMode and the memoized apply function
-
+  }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle]); // Depends on mode and load status
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
-    
