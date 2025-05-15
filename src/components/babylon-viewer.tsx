@@ -37,7 +37,6 @@ interface BabylonViewerProps {
   onFpsUpdate?: (fps: number) => void;
   renderingMode: RenderingMode;
   onModelHierarchyReady?: (hierarchy: ModelNode[]) => void;
-  wireframeOverlayEnabled?: boolean;
 }
 
 export const BabylonViewer: React.FC<BabylonViewerProps> = ({
@@ -48,7 +47,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   onFpsUpdate,
   renderingMode,
   onModelHierarchyReady,
-  wireframeOverlayEnabled = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Nullable<Engine>>(null);
@@ -56,27 +54,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   const loadedAssetContainerRef = useRef<Nullable<AssetContainer>>(null);
   const [isCurrentModelActuallyLoaded, setIsCurrentModelActuallyLoaded] = useState(false);
 
-  const toggleWireframeEdges = useCallback((enabled: boolean) => {
-    const container = loadedAssetContainerRef.current;
-    if (!container || !sceneRef.current) return;
-
-    container.meshes.forEach((mesh: AbstractMesh) => {
-      if (mesh.name === "grid") return; // Skip grid
-
-      if (enabled) {
-        // For enableEdgesRendering, a small epsilon means more edges are shown.
-        // 0.95 is default (very sharp edges). Values closer to 0 show more subtle edges.
-        // An epsilon of 0.00001 should show most feature edges.
-        mesh.enableEdgesRendering(0.00001); 
-        mesh.edgesWidth = 2.0;
-        mesh.edgesColor = Color4.FromHexString("#00FFFF"); // Bright Cyan for max visibility
-      } else {
-        if (mesh.edgesRenderer) { 
-          mesh.disableEdgesRendering(); 
-        }
-      }
-    });
-  }, [sceneRef]);
 
   const applyRenderingModeStyle = useCallback((mode: RenderingMode) => {
     const container = loadedAssetContainerRef.current;
@@ -85,6 +62,11 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     container.meshes.forEach((mesh: AbstractMesh) => {
       if (mesh.name === "grid") { 
         return;
+      }
+
+      // Disable any existing edges rendering first
+      if (mesh.edgesRenderer) { 
+          mesh.disableEdgesRendering(); 
       }
 
       if (mesh.material) {
@@ -116,11 +98,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       }
     });
-    // Ensure wireframe overlay is consistent with rendering mode changes
-    if (loadedAssetContainerRef.current) {
-        toggleWireframeEdges(wireframeOverlayEnabled);
-    }
-  }, [sceneRef, wireframeOverlayEnabled, toggleWireframeEdges]);
+  }, [sceneRef]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -310,7 +288,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           onModelHierarchyReady(hierarchyRoots);
         }
         applyRenderingModeStyle(renderingMode); 
-        toggleWireframeEdges(wireframeOverlayEnabled); 
       })
       .catch(error => {
         console.error("Error loading model:", error);
@@ -334,23 +311,15 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, toggleWireframeEdges, renderingMode, wireframeOverlayEnabled]); 
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, renderingMode]); 
 
 
   useEffect(() => {
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode);
-      // toggleWireframeEdges is called within applyRenderingModeStyle to ensure correct order
     }
   }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle]);
   
-  useEffect(() => {
-    if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
-        toggleWireframeEdges(wireframeOverlayEnabled);
-    }
-  }, [wireframeOverlayEnabled, isCurrentModelActuallyLoaded, toggleWireframeEdges]);
-  
-
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
 

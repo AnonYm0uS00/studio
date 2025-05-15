@@ -6,7 +6,7 @@ import { Vector3 } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer, type RenderingMode } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon, SplineIcon } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
@@ -27,7 +27,6 @@ export default function Home() {
   const [modelHierarchy, setModelHierarchy] = useState<ModelNode[]>([]);
   const [renderingMode, setRenderingMode] = useState<RenderingMode>('shaded');
   const [currentFps, setCurrentFps] = useState<number>(0);
-  const [showWireframeOverlay, setShowWireframeOverlay] = useState<boolean>(false);
 
 
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
@@ -215,7 +214,6 @@ export default function Home() {
                   renderingMode={renderingMode}
                   onFpsUpdate={handleFpsUpdate}
                   onModelHierarchyReady={handleModelHierarchyReady}
-                  wireframeOverlayEnabled={showWireframeOverlay}
               />
             )}
 
@@ -253,17 +251,6 @@ export default function Home() {
               <>
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card/80 backdrop-blur-md rounded-md border border-border shadow-md text-xs text-muted-foreground">
                   FPS: {currentFps}
-                </div>
-                <div className="absolute top-4 right-4 z-10">
-                  <Button 
-                    variant={showWireframeOverlay ? "default" : "outline"} 
-                    size="icon" 
-                    onClick={() => setShowWireframeOverlay(!showWireframeOverlay)}
-                    className="bg-card/70 backdrop-blur-md hover:bg-accent hover:text-accent-foreground"
-                    title={showWireframeOverlay ? "Hide Wireframe Overlay" : "Show Wireframe Overlay"}
-                  >
-                    <SplineIcon className="h-5 w-5" />
-                  </Button>
                 </div>
               </>
             )}
