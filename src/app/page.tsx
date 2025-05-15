@@ -2,7 +2,6 @@
 'use client';
 import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
-// import { Vector3 } from '@babylonjs/core'; // Not used directly in page.tsx for camera controls, example removed
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
@@ -142,7 +141,7 @@ export default function Home() {
     setIsLoading(false);
     if (!success) {
       setError(errorMessage || "Failed to load model.");
-      toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (GLB, GLTF, OBJ).", variant: "destructive" });
+      toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (e.g., .glb, .gltf, .obj).", variant: "destructive" });
       setModelHierarchy([]);
     } else {
       setError(null);
@@ -231,7 +230,8 @@ export default function Home() {
                   </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="system" className="text-xs">
                     <Laptop className="mr-2 h-3.5 w-3.5" /> System
-                  </DropdownMenuRadioGroup>
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -387,5 +387,5 @@ export default function Home() {
       </footer>
     </div>
   );
-}
 
+    
