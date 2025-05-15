@@ -54,16 +54,17 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     camera.attachControl(canvasRef.current, true);
     camera.wheelPrecision = 50;
     camera.lowerRadiusLimit = 0.1; 
-    camera.upperRadiusLimit = 1000;
+    camera.upperRadiusLimit = 1000; // Keep upper limit high for user zoom out flexibility
     onCameraReady(camera);
 
     new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
     new HemisphericLight("light2", new Vector3(-1, -1, -0.5), scene);
 
     // Create grid
-    const ground = MeshBuilder.CreateGround("grid", {width: 1000, height: 1000, subdivisions: 100}, scene);
+    // Reduced size from 1000x1000 to 100x100, and subdivisions from 100 to 10
+    const ground = MeshBuilder.CreateGround("grid", {width: 100, height: 100, subdivisions: 10}, scene);
     const gridMaterial = new GridMaterial("gridMaterial", scene);
-    gridMaterial.majorUnitFrequency = 10; // Every 10 units
+    gridMaterial.majorUnitFrequency = 10; // Every 10 units (relative to gridRatio)
     gridMaterial.minorUnitVisibility = 0.45; // How visible minor lines are
     gridMaterial.gridRatio = 1; // Size of each grid cell
     gridMaterial.mainColor = Color3.FromHexString("#333333"); // Color of the grid plane (between lines)
@@ -122,7 +123,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         const camera = scene.activeCamera as ArcRotateCamera;
         if (camera) {
             camera.target = Vector3.Zero();
-            camera.radius = 10;
+            camera.radius = 10; // Default radius when no model
             camera.alpha = -Math.PI / 2;
             camera.beta = Math.PI / 2.5;
         }
@@ -162,8 +163,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             camera.setTarget(center);
 
             const distance = Vector3.Distance(min, max);
-            camera.radius = Math.max(distance * 1.5, 1); 
+            camera.radius = Math.max(distance * 1.5, 1); // Adjust radius based on model size
           } else {
+             // Fallback if model has no clear bounds (e.g. empty GLTF)
              camera.setTarget(Vector3.Zero());
              camera.radius = 10;
           }
@@ -178,11 +180,10 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         } else if (typeof error === 'string') {
             userMessage = error;
         }
-        if (pluginHint === '.obj' && !isDataUrl) { // Check pluginHint instead of modelFileExtension for data URLs
-             userMessage += " For OBJ files from a URL, ensure any .mtl material files and textures are accessible (usually in the same directory or correctly referenced).";
-        }
-         else if (pluginHint === '.obj' && isDataUrl) {
+        if (modelFileExtension === '.obj' && isDataUrl) {
              userMessage += " For OBJ files loaded from local disk, .mtl files and textures are typically not packaged within the .obj data URI and may not load. Consider using GLB format for self-contained models.";
+        } else if (modelFileExtension === '.obj' && !isDataUrl) {
+             userMessage += " For OBJ files from a URL, ensure any .mtl material files and textures are accessible (usually in the same directory or correctly referenced).";
         }
 
 
