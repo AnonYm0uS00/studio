@@ -20,7 +20,7 @@ import {
   MultiMaterial,
   Node,
   TransformNode,
-  Mesh // Added Mesh type
+  Mesh
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF';
@@ -64,9 +64,11 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       if (mesh.name === "grid") return; // Skip grid
 
       if (enabled) {
-        // Epsilon 0 should theoretically show all edges where adjacent face normals differ even slightly.
-        mesh.enableEdgesRendering(0); 
-        mesh.edgesWidth = 2.0; // Made thicker
+        // For enableEdgesRendering, a small epsilon means more edges are shown.
+        // 0.95 is default (very sharp edges). Values closer to 0 show more subtle edges.
+        // An epsilon of 0.00001 should show most feature edges.
+        mesh.enableEdgesRendering(0.00001); 
+        mesh.edgesWidth = 2.0;
         mesh.edgesColor = Color4.FromHexString("#00FFFF"); // Bright Cyan for max visibility
       } else {
         if (mesh.edgesRenderer) { 
@@ -114,7 +116,11 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       }
     });
-  }, [sceneRef]);
+    // Ensure wireframe overlay is consistent with rendering mode changes
+    if (loadedAssetContainerRef.current) {
+        toggleWireframeEdges(wireframeOverlayEnabled);
+    }
+  }, [sceneRef, wireframeOverlayEnabled, toggleWireframeEdges]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -193,7 +199,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     if (loadedAssetContainerRef.current) {
       loadedAssetContainerRef.current.meshes.forEach(mesh => {
-        if (mesh.edgesRenderer) { // Clean up existing edges renderers
+        if (mesh.edgesRenderer) { 
           mesh.disableEdgesRendering(); 
         }
       });
@@ -217,7 +223,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     const isDataUrl = modelUrl.startsWith('data:');
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
-    const pluginExtension = modelFileExtension || undefined;
+    const pluginExtension = isDataUrl ? modelFileExtension || undefined : undefined;
 
 
     if (grid) grid.setEnabled(false);
@@ -328,15 +334,21 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, toggleWireframeEdges, renderingMode, wireframeOverlayEnabled]); // Dependencies for model loading logic
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, toggleWireframeEdges, renderingMode, wireframeOverlayEnabled]); 
 
 
   useEffect(() => {
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode);
-      toggleWireframeEdges(wireframeOverlayEnabled); 
+      // toggleWireframeEdges is called within applyRenderingModeStyle to ensure correct order
     }
-  }, [renderingMode, wireframeOverlayEnabled, isCurrentModelActuallyLoaded, applyRenderingModeStyle, toggleWireframeEdges]);
+  }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle]);
+  
+  useEffect(() => {
+    if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
+        toggleWireframeEdges(wireframeOverlayEnabled);
+    }
+  }, [wireframeOverlayEnabled, isCurrentModelActuallyLoaded, toggleWireframeEdges]);
   
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
