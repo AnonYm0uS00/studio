@@ -69,7 +69,6 @@ export default function Home() {
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (GLB, GLTF, OBJ).", variant: "destructive" });
     } else {
       setError(null); 
-      // Toast for success is removed as per implicit requirement of not showing "model loaded successfully"
     }
   }, [toast]);
 
@@ -82,7 +81,6 @@ export default function Home() {
     fileInputRef.current?.click();
   };
 
-  // Removed FPS and Rendering Mode states and handlers as they are not in the target UI's viewport area
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -130,9 +128,9 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground">Open a 3D model to view its information.</p>
                 </div>
               ) : modelName && !error ? (
-                 <div className="p-2">
+                 <div className="p-2 space-y-1">
                     <p className="text-sm font-semibold text-foreground">Name: <span className="font-normal text-muted-foreground">{modelName}</span></p>
-                    {/* Hierarchy removed as per previous request and not explicitly shown in target "Info" tab */}
+                    <p className="text-sm font-semibold text-foreground">Path: <span className="font-normal text-muted-foreground break-all">{modelName}</span></p>
                  </div>
               ) : null }
             </TabsContent>
@@ -170,13 +168,12 @@ export default function Home() {
                 </div>
             )}
 
-            {(submittedModelUrl || isLoading || error) && ( // Render viewer if there's a URL, or loading, or an error to show
+            {(submittedModelUrl || isLoading || error) && ( 
               <BabylonViewer
                   modelUrl={submittedModelUrl}
                   modelFileExtension={modelFileExtension}
                   onModelLoaded={handleModelLoaded}
                   onCameraReady={handleCameraReady}
-                  // onFpsUpdate and renderingMode props removed as UI elements are removed
               />
             )}
 
@@ -206,7 +203,6 @@ export default function Home() {
                 </Button>
                 </div>
             )}
-            {/* FPS Display and Rendering Mode Buttons removed from here */}
         </main>
       </div>
 
