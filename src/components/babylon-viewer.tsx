@@ -38,6 +38,8 @@ interface BabylonViewerProps {
   onFpsUpdate?: (fps: number) => void;
   renderingMode: RenderingMode;
   onModelHierarchyReady?: (hierarchy: ModelNode[]) => void;
+  nearClip: number;
+  farClip: number;
 }
 
 const resetCameraAndEnvironment = (scene: Nullable<Scene>, camera: Nullable<ArcRotateCamera>) => {
@@ -53,7 +55,7 @@ const resetCameraAndEnvironment = (scene: Nullable<Scene>, camera: Nullable<ArcR
 
   if (scene.environmentTexture) {
       scene.environmentTexture.dispose();
-      scene.environmentTexture = null; // Ensure it's fully cleared
+      scene.environmentTexture = null; 
   }
   const skybox = scene.getMeshByName("hdrSkyBox");
   if (skybox) skybox.dispose();
@@ -70,6 +72,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   onFpsUpdate,
   renderingMode,
   onModelHierarchyReady,
+  nearClip,
+  farClip,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Nullable<Engine>>(null);
@@ -129,10 +133,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     scene.clearColor = new Color4(0, 0, 0, 0); 
 
     const camera = new ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, Vector3.Zero(), scene);
+    camera.minZ = nearClip;
+    camera.maxZ = farClip;
     camera.attachControl(canvasRef.current, true);
     camera.wheelPrecision = 50;
     camera.lowerRadiusLimit = 0.1;
-    camera.upperRadiusLimit = 2000; // Increased upper limit
+    camera.upperRadiusLimit = 2000;
     onCameraReady(camera);
     
     scene.createDefaultEnvironment({
@@ -196,7 +202,16 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         engineRef.current = null;
       }
     };
-  }, [onCameraReady, onFpsUpdate]);
+  }, [onCameraReady, onFpsUpdate, nearClip, farClip]); // Added nearClip, farClip
+
+  useEffect(() => {
+    const activeCamera = sceneRef.current?.activeCamera;
+    if (activeCamera) {
+      activeCamera.minZ = nearClip;
+      activeCamera.maxZ = farClip;
+    }
+  }, [nearClip, farClip, sceneRef]);
+
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -222,7 +237,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     const isDataUrl = modelUrl.startsWith('data:');
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
-    const pluginExtension = isDataUrl ? modelFileExtension || undefined : undefined;
+    const pluginExtension = modelFileExtension || undefined;
 
 
     if (grid) grid.setEnabled(false); 
@@ -240,7 +255,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
             if (visibleEnabledMeshes.length > 0) {
                 visibleEnabledMeshes.forEach(mesh => mesh.computeWorldMatrix(true));
-                camera.zoomOn(visibleEnabledMeshes, true); // true for framing behavior based on bounding box center
+                camera.zoomOn(visibleEnabledMeshes, true); 
 
                 let min = new Vector3(Infinity, Infinity, Infinity);
                 let max = new Vector3(-Infinity, -Infinity, -Infinity);
@@ -318,7 +333,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             
           onModelHierarchyReady(hierarchyRoots);
         }
-        // Apply initial rendering mode after model is loaded and framed
         applyRenderingModeStyle(renderingMode); 
       })
       .catch(error => {
@@ -344,11 +358,10 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         resetCameraAndEnvironment(scene, camera);
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, renderingMode, applyRenderingModeStyle]); // Added renderingMode & applyRenderingModeStyle for initial application
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, renderingMode]);
 
 
   useEffect(() => {
-    // This effect specifically handles changes to renderingMode for an already loaded model.
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode);
     }
@@ -356,4 +369,3 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
-

@@ -6,11 +6,23 @@ import { Vector3 } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer, type RenderingMode } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon, SplineIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
 import { ModelHierarchyView } from '@/components/model-hierarchy-view';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Slider } from "@/components/ui/slider";
 
 
 export default function Home() {
@@ -27,6 +39,9 @@ export default function Home() {
   const [modelHierarchy, setModelHierarchy] = useState<ModelNode[]>([]);
   const [renderingMode, setRenderingMode] = useState<RenderingMode>('shaded');
   const [currentFps, setCurrentFps] = useState<number>(0);
+
+  const [nearClip, setNearClip] = useState<number>(0.1);
+  const [farClip, setFarClip] = useState<number>(2000);
 
 
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
@@ -77,8 +92,6 @@ export default function Home() {
       setModelHierarchy([]);
     } else {
       setError(null); 
-      // Do not show success toast here, as it was too frequent. 
-      // User knows it's loaded when it appears.
     }
   }, [toast]);
 
@@ -111,10 +124,50 @@ export default function Home() {
             <FileText className="h-4 w-4" />
             <span className="sr-only">Documentation</span>
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
-            <Settings className="h-4 w-4" />
-            <span className="sr-only">Settings</span>
-          </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
+                <Settings className="h-4 w-4" />
+                <span className="sr-only">Settings</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-64 mr-2">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs font-semibold">Clipping Planes</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="focus:bg-transparent">
+                  <div className="w-full space-y-2">
+                    <label htmlFor="nearClipSlider" className="text-xs text-muted-foreground">Near: {nearClip.toFixed(2)}</label>
+                    <Slider
+                      id="nearClipSlider"
+                      value={[nearClip]}
+                      onValueChange={(value) => setNearClip(value[0])}
+                      min={0.01}
+                      max={10}
+                      step={0.01}
+                      className="w-full"
+                    />
+                  </div>
+                </DropdownMenuItem>
+                 <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="focus:bg-transparent">
+                  <div className="w-full space-y-2">
+                    <label htmlFor="farClipSlider" className="text-xs text-muted-foreground">Far: {farClip.toFixed(0)}</label>
+                    <Slider
+                      id="farClipSlider"
+                      value={[farClip]}
+                      onValueChange={(value) => setFarClip(value[0])}
+                      min={100}
+                      max={10000}
+                      step={100}
+                      className="w-full"
+                    />
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
             <Info className="h-4 w-4" />
             <span className="sr-only">Info</span>
@@ -188,7 +241,7 @@ export default function Home() {
             {!submittedModelUrl && !isLoading && !error && (
                 <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
                     <div 
-                        className="flex flex-col items-center justify-center p-10 bg-card/70 backdrop-blur-md rounded-lg shadow-xl border border-border cursor-pointer"
+                        className="flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer backdrop-blur-md"
                         onClick={triggerFileDialog}
                     >
                         <div className="flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4">
@@ -214,6 +267,8 @@ export default function Home() {
                   renderingMode={renderingMode}
                   onFpsUpdate={handleFpsUpdate}
                   onModelHierarchyReady={handleModelHierarchyReady}
+                  nearClip={nearClip}
+                  farClip={farClip}
               />
             )}
 
