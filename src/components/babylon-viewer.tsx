@@ -20,11 +20,11 @@ import {
   MultiMaterial,
   Node,
   TransformNode,
-  Mesh
+  Mesh // Added Mesh type
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF';
-import '@babylonjs/loaders/OBJ';
+import '@babylonjs/loaders/OBJ'; // For OBJ support
 import type { ModelNode } from './types';
 
 export type RenderingMode = 'shaded' | 'non-shaded' | 'wireframe';
@@ -64,28 +64,24 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       if (mesh.name === "grid") return; // Skip grid
 
       if (enabled) {
-        // To show all polygon edges (topology view):
-        // Epsilon is the threshold angle. If the angle between normals of adjacent faces is *lower* than epsilon, the edge is NOT rendered.
-        // Therefore, a very SMALL epsilon ensures only edges between nearly perfectly co-planar faces are hidden.
-        mesh.enableEdgesRendering(0.00001); 
-        mesh.edgesWidth = 1.5; 
-        mesh.edgesColor = Color4.FromColor3(Color3.FromHexString("#008080"), 1); // Teal, fully opaque
+        // Epsilon 0 should theoretically show all edges where adjacent face normals differ even slightly.
+        mesh.enableEdgesRendering(0); 
+        mesh.edgesWidth = 2.0; // Made thicker
+        mesh.edgesColor = Color4.FromHexString("#00FFFF"); // Bright Cyan for max visibility
       } else {
-        if (mesh.edgesRenderer) {
-          mesh.edgesRenderer.isEnabled = false;
-          // Optionally, to fully clean up: mesh.disableEdgesRendering(); 
-          // But just disabling is often fine and potentially faster if toggling frequently.
+        if (mesh.edgesRenderer) { 
+          mesh.disableEdgesRendering(); 
         }
       }
     });
-  }, [sceneRef]); // sceneRef is stable
+  }, [sceneRef]);
 
   const applyRenderingModeStyle = useCallback((mode: RenderingMode) => {
     const container = loadedAssetContainerRef.current;
     if (!container || !sceneRef.current) return;
 
     container.meshes.forEach((mesh: AbstractMesh) => {
-      if (mesh.name === "grid") { // Explicitly skip grid material changes
+      if (mesh.name === "grid") { 
         return;
       }
 
@@ -197,7 +193,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     if (loadedAssetContainerRef.current) {
       loadedAssetContainerRef.current.meshes.forEach(mesh => {
-        if (mesh.edgesRenderer) {
+        if (mesh.edgesRenderer) { // Clean up existing edges renderers
           mesh.disableEdgesRendering(); 
         }
       });
@@ -307,9 +303,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             
           onModelHierarchyReady(hierarchyRoots);
         }
-        // Initial style and overlay application after model load
-        applyRenderingModeStyle(renderingMode); // Apply initial rendering mode
-        toggleWireframeEdges(wireframeOverlayEnabled); // Apply initial wireframe overlay state
+        applyRenderingModeStyle(renderingMode); 
+        toggleWireframeEdges(wireframeOverlayEnabled); 
       })
       .catch(error => {
         console.error("Error loading model:", error);
@@ -333,7 +328,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, toggleWireframeEdges, renderingMode, wireframeOverlayEnabled]);
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, toggleWireframeEdges, renderingMode, wireframeOverlayEnabled]); // Dependencies for model loading logic
 
 
   useEffect(() => {
