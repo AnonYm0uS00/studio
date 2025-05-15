@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Vector3 } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { BabylonViewer } from '@/components/babylon-viewer';
+import { BabylonViewer, type RenderingMode } from '@/components/babylon-viewer';
 import { AlertTriangle, IterationCcw, UploadCloud } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
@@ -19,6 +19,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [currentFps, setCurrentFps] = useState(0);
+  const [renderingMode, setRenderingMode] = useState<RenderingMode>('shaded');
 
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -112,6 +113,7 @@ export default function Home() {
           onModelLoaded={handleModelLoaded}
           onCameraReady={handleCameraReady}
           onFpsUpdate={handleFpsUpdate}
+          renderingMode={renderingMode}
         />
 
         {isLoading && (
@@ -153,9 +155,34 @@ export default function Home() {
       </main>
 
       {submittedModelUrl && !error && !isLoading && (
-        <div className="absolute bottom-4 right-4 bg-card/90 text-card-foreground p-2 rounded-md shadow-md border border-border z-20 text-sm">
-          FPS: {currentFps}
-        </div>
+        <>
+          <div className="absolute bottom-4 right-4 bg-card/90 text-card-foreground p-2 rounded-md shadow-md border border-border z-20 text-sm">
+            FPS: {currentFps}
+          </div>
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 flex gap-2">
+            <Button
+              variant={renderingMode === 'shaded' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setRenderingMode('shaded')}
+            >
+              Shaded
+            </Button>
+            <Button
+              variant={renderingMode === 'non-shaded' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setRenderingMode('non-shaded')}
+            >
+              Non-Shaded
+            </Button>
+            <Button
+              variant={renderingMode === 'wireframe' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setRenderingMode('wireframe')}
+            >
+              Wireframe
+            </Button>
+          </div>
+        </>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 
 'use client';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   Engine,
   Scene,
@@ -14,11 +14,16 @@ import {
   Nullable,
   MeshBuilder,
   Color3,
+  Material, 
+  PBRMaterial, 
+  StandardMaterial,
+  MultiMaterial
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF'; // For GLTF/GLB support
 import '@babylonjs/loaders/OBJ';  // For OBJ support
 
+export type RenderingMode = 'shaded' | 'non-shaded' | 'wireframe';
 
 interface BabylonViewerProps {
   modelUrl: string | null;
@@ -26,6 +31,7 @@ interface BabylonViewerProps {
   onModelLoaded: (success: boolean, error?: string) => void;
   onCameraReady: (camera: ArcRotateCamera) => void;
   onFpsUpdate?: (fps: number) => void;
+  renderingMode: RenderingMode;
 }
 
 export const BabylonViewer: React.FC<BabylonViewerProps> = ({ 
@@ -33,12 +39,54 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   modelFileExtension, 
   onModelLoaded, 
   onCameraReady,
-  onFpsUpdate 
+  onFpsUpdate,
+  renderingMode
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Nullable<Engine>>(null);
   const sceneRef = useRef<Nullable<Scene>>(null);
   const loadedAssetContainerRef = useRef<Nullable<AssetContainer>>(null);
+
+  const applyRenderingModeStyle = useCallback((mode: RenderingMode, container: Nullable<AssetContainer>) => {
+    if (!container || !sceneRef.current) return;
+
+    container.meshes.forEach((mesh: AbstractMesh) => {
+      if (mesh.material) {
+        const processMaterial = (mat: Material) => {
+          // General resets
+          mat.wireframe = false;
+          
+          // Material type specific resets
+          if (mat instanceof PBRMaterial) {
+            mat.unlit = false;
+          } else if (mat instanceof StandardMaterial) {
+            mat.disableLighting = false;
+          }
+
+          // Apply new mode
+          if (mode === 'wireframe') {
+            mat.wireframe = true;
+          } else if (mode === 'non-shaded') {
+            if (mat instanceof PBRMaterial) {
+              mat.unlit = true;
+            } else if (mat instanceof StandardMaterial) {
+              mat.disableLighting = true;
+            }
+          }
+          // 'shaded' is the default state after resets
+        };
+
+        if (mesh.material instanceof MultiMaterial) {
+            mesh.material.subMaterials.forEach(subMat => {
+                if (subMat) processMaterial(subMat);
+            });
+        } else {
+            processMaterial(mesh.material);
+        }
+      }
+    });
+  }, [sceneRef]);
+
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -54,26 +102,24 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     camera.attachControl(canvasRef.current, true);
     camera.wheelPrecision = 50;
     camera.lowerRadiusLimit = 0.1; 
-    camera.upperRadiusLimit = 1000; // Keep upper limit high for user zoom out flexibility
+    camera.upperRadiusLimit = 1000;
     onCameraReady(camera);
 
     new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
     new HemisphericLight("light2", new Vector3(-1, -1, -0.5), scene);
 
-    // Create grid
-    // Reduced size from 1000x1000 to 100x100, and subdivisions from 100 to 10
     const ground = MeshBuilder.CreateGround("grid", {width: 100, height: 100, subdivisions: 10}, scene);
     const gridMaterial = new GridMaterial("gridMaterial", scene);
-    gridMaterial.majorUnitFrequency = 10; // Every 10 units (relative to gridRatio)
-    gridMaterial.minorUnitVisibility = 0.45; // How visible minor lines are
-    gridMaterial.gridRatio = 1; // Size of each grid cell
-    gridMaterial.mainColor = Color3.FromHexString("#333333"); // Color of the grid plane (between lines)
-    gridMaterial.lineColor = Color3.FromHexString("#595959"); // Color of the major grid lines
-    gridMaterial.opacity = 0.98; // Slightly transparent
-    gridMaterial.useMaxLine = true; // Emphasize main X/Z axis lines
+    gridMaterial.majorUnitFrequency = 10;
+    gridMaterial.minorUnitVisibility = 0.45;
+    gridMaterial.gridRatio = 1;
+    gridMaterial.mainColor = Color3.FromHexString("#333333");
+    gridMaterial.lineColor = Color3.FromHexString("#595959");
+    gridMaterial.opacity = 0.98;
+    gridMaterial.useMaxLine = true;
     ground.material = gridMaterial;
     ground.isPickable = false;
-    ground.position.y = 0; // Ensure grid is at the base
+    ground.position.y = 0;
 
 
     engine.runRenderLoop(() => {
@@ -94,7 +140,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     return () => {
       resizeObserver.disconnect();
-      // scene.dispose will also dispose meshes and materials like ground and gridMaterial
       if (sceneRef.current) {
         sceneRef.current.dispose();
         sceneRef.current = null;
@@ -123,7 +168,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         const camera = scene.activeCamera as ArcRotateCamera;
         if (camera) {
             camera.target = Vector3.Zero();
-            camera.radius = 10; // Default radius when no model
+            camera.radius = 10;
             camera.alpha = -Math.PI / 2;
             camera.beta = Math.PI / 2.5;
         }
@@ -133,7 +178,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     const isDataUrl = modelUrl.startsWith('data:');
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
-    
     const pluginHint = isDataUrl ? (modelFileExtension || undefined) : undefined;
 
     SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginHint)
@@ -143,7 +187,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         
         if (container.meshes.length > 0 && scene.activeCamera) {
           const camera = scene.activeCamera as ArcRotateCamera;
-          
           let min = new Vector3(Infinity, Infinity, Infinity);
           let max = new Vector3(-Infinity, -Infinity, -Infinity);
 
@@ -161,15 +204,14 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           if (min.x !== Infinity) { 
             const center = Vector3.Center(min, max);
             camera.setTarget(center);
-
             const distance = Vector3.Distance(min, max);
-            camera.radius = Math.max(distance * 1.5, 1); // Adjust radius based on model size
+            camera.radius = Math.max(distance * 1.5, 1);
           } else {
-             // Fallback if model has no clear bounds (e.g. empty GLTF)
              camera.setTarget(Vector3.Zero());
              camera.radius = 10;
           }
         }
+        applyRenderingModeStyle(renderingMode, container); // Apply mode to newly loaded model
         onModelLoaded(true);
       })
       .catch(error => {
@@ -185,12 +227,18 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         } else if (modelFileExtension === '.obj' && !isDataUrl) {
              userMessage += " For OBJ files from a URL, ensure any .mtl material files and textures are accessible (usually in the same directory or correctly referenced).";
         }
-
-
         onModelLoaded(false, userMessage);
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef]);
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, renderingMode, applyRenderingModeStyle]);
+
+  // Effect to apply rendering mode when the prop changes for an already loaded model
+  useEffect(() => {
+    if (loadedAssetContainerRef.current) {
+      applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
+    }
+  }, [renderingMode, applyRenderingModeStyle]);
+
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
