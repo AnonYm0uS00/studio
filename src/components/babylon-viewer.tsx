@@ -21,11 +21,11 @@ import {
   Node,
   TransformNode,
   Mesh,
-  CubeTexture, // Added for environment texture
+  // CubeTexture, // Not currently used, but could be for custom skybox
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF';
-import '@babylonjs/loaders/OBJ'; // For OBJ support
+import '@babylonjs/loaders/OBJ';
 import type { ModelNode } from './types';
 
 export type RenderingMode = 'shaded' | 'non-shaded' | 'wireframe';
@@ -39,6 +39,28 @@ interface BabylonViewerProps {
   renderingMode: RenderingMode;
   onModelHierarchyReady?: (hierarchy: ModelNode[]) => void;
 }
+
+const resetCameraAndEnvironment = (scene: Nullable<Scene>, camera: Nullable<ArcRotateCamera>) => {
+  if (!scene || !camera) return;
+
+  camera.setTarget(Vector3.Zero());
+  camera.radius = 10;
+  camera.alpha = -Math.PI / 2;
+  camera.beta = Math.PI / 2.5;
+
+  const groundMesh = scene.getMeshByName("grid");
+  if(groundMesh) groundMesh.position.y = 0;
+
+  if (scene.environmentTexture) {
+      scene.environmentTexture.dispose();
+      scene.environmentTexture = null; // Ensure it's fully cleared
+  }
+  const skybox = scene.getMeshByName("hdrSkyBox");
+  if (skybox) skybox.dispose();
+  
+  scene.createDefaultEnvironment({ createSkybox: true, skyboxSize: 1000, createGround: false });
+};
+
 
 export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   modelUrl,
@@ -58,7 +80,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
   const applyRenderingModeStyle = useCallback((mode: RenderingMode) => {
     const container = loadedAssetContainerRef.current;
-    if (!container || !sceneRef.current) return;
+    if (!container || !sceneRef.current || !isCurrentModelActuallyLoaded) return;
 
     container.meshes.forEach((mesh: AbstractMesh) => {
       if (mesh.name === "grid") { 
@@ -94,7 +116,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       }
     });
-  }, [sceneRef]);
+  }, [sceneRef, isCurrentModelActuallyLoaded]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -106,24 +128,19 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     scene.clearColor = new Color4(0, 0, 0, 0); 
 
-    // Create a default environment (skybox and IBL)
-    // This is crucial for PBR materials, especially metallic ones, to render correctly.
-    scene.createDefaultEnvironment({
-        createSkybox: true,
-        skyboxSize: 1000, // Match grid size or adjust as needed
-        createGround: false, // We have our own grid
-        // environmentTexture: "/path/to/your/environment.env" // Optionally load a custom HDR
-    });
-
-
     const camera = new ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, Vector3.Zero(), scene);
     camera.attachControl(canvasRef.current, true);
     camera.wheelPrecision = 50;
     camera.lowerRadiusLimit = 0.1;
-    camera.upperRadiusLimit = 1000; // Increased for potentially larger scenes with skybox
+    camera.upperRadiusLimit = 2000; // Increased upper limit
     onCameraReady(camera);
+    
+    scene.createDefaultEnvironment({
+        createSkybox: true,
+        skyboxSize: 1000,
+        createGround: false,
+    });
 
-    // Hemispheric lights are good for basic fill, but PBR relies more on IBL
     new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
     new HemisphericLight("light2", new Vector3(-1, -1, -0.5), scene);
 
@@ -138,7 +155,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     gridMaterial.useMaxLine = true;
     ground.material = gridMaterial;
     ground.isPickable = false;
-    ground.position.y = 0; // Ensure grid is at a reasonable default position
+    ground.position.y = 0; 
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -165,7 +182,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         if (gridMesh) {
             gridMesh.dispose(false, true); 
         }
-        // Dispose of default environment elements if they exist
         const skybox = sceneRef.current.getMeshByName("hdrSkyBox");
         if (skybox) skybox.dispose();
         if (sceneRef.current.environmentTexture) {
@@ -184,7 +200,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene || !onModelLoaded) return;
+    const camera = scene?.activeCamera as Nullable<ArcRotateCamera>;
+
+    if (!scene || !camera || !onModelLoaded) return;
 
     setIsCurrentModelActuallyLoaded(false); 
     if (onModelHierarchyReady) onModelHierarchyReady([]);
@@ -197,20 +215,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     const grid = scene.getMeshByName("grid");
 
     if (!modelUrl) {
-        const camera = scene.activeCamera as ArcRotateCamera;
-        if (camera) {
-            camera.target = Vector3.Zero();
-            camera.radius = 10;
-            camera.alpha = -Math.PI / 2;
-            camera.beta = Math.PI / 2.5;
-        }
-        if (grid) {
-            grid.setEnabled(true);
-            grid.position.y = 0; // Reset grid position
-        }
-        if (scene.environmentTexture) scene.environmentTexture.dispose(); // Dispose old env texture
-        scene.createDefaultEnvironment({ createSkybox: true, skyboxSize: 1000, createGround: false }); // Recreate for empty scene
-
+        resetCameraAndEnvironment(scene, camera);
+        if (grid) grid.setEnabled(true);
         return;
     }
 
@@ -219,7 +225,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     const pluginExtension = isDataUrl ? modelFileExtension || undefined : undefined;
 
 
-    if (grid) grid.setEnabled(false); // Hide grid during load
+    if (grid) grid.setEnabled(false); 
 
     SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginExtension)
       .then(container => {
@@ -227,52 +233,49 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         container.addAllToScene();
         if (grid) grid.setEnabled(true);
 
-        if (container.meshes.length > 0 && scene.activeCamera) {
-          const camera = scene.activeCamera as ArcRotateCamera;
-          let min = new Vector3(Infinity, Infinity, Infinity);
-          let max = new Vector3(-Infinity, -Infinity, -Infinity);
+        const allModelMeshes = container.meshes.filter(m => m.name !== "grid");
 
-          container.meshes.forEach((mesh: AbstractMesh) => {
-            if (mesh.name === "grid") return; // Exclude our grid from bounds calculation
-            mesh.computeWorldMatrix(true); 
-            const boundingInfo = mesh.getBoundingInfo();
-            if (boundingInfo) {
-              const meshMin = boundingInfo.boundingBox.minimumWorld;
-              const meshMax = boundingInfo.boundingBox.maximumWorld;
-              min = Vector3.Minimize(min, meshMin);
-              max = Vector3.Maximize(max, meshMax);
+        if (allModelMeshes.length > 0) {
+            const visibleEnabledMeshes = allModelMeshes.filter(m => m.isVisible && m.isEnabled());
+
+            if (visibleEnabledMeshes.length > 0) {
+                visibleEnabledMeshes.forEach(mesh => mesh.computeWorldMatrix(true));
+                camera.zoomOn(visibleEnabledMeshes, true); // true for framing behavior based on bounding box center
+
+                let min = new Vector3(Infinity, Infinity, Infinity);
+                let max = new Vector3(-Infinity, -Infinity, -Infinity);
+                visibleEnabledMeshes.forEach((mesh: AbstractMesh) => {
+                    const boundingInfo = mesh.getBoundingInfo();
+                    if (boundingInfo) {
+                        min = Vector3.Minimize(min, boundingInfo.boundingBox.minimumWorld);
+                        max = Vector3.Maximize(max, boundingInfo.boundingBox.maximumWorld);
+                    }
+                });
+
+                if (min.x !== Infinity) {
+                    const modelSize = Vector3.Distance(min, max);
+                    const groundMesh = scene.getMeshByName("grid");
+                    if(groundMesh) {
+                        groundMesh.position.y = min.y - 0.01;
+                    }
+                    
+                    if (scene.environmentTexture) {
+                        scene.environmentTexture.dispose();
+                        scene.environmentTexture = null;
+                    }
+                    const skybox = scene.getMeshByName("hdrSkyBox");
+                    if (skybox) skybox.dispose();
+                    scene.createDefaultEnvironment({ createSkybox: true, skyboxSize: Math.max(modelSize * 5, 2000), createGround: false });
+                } else {
+                    resetCameraAndEnvironment(scene, camera);
+                }
+            } else {
+                resetCameraAndEnvironment(scene, camera);
             }
-          });
-          
-          if (min.x !== Infinity) {
-            const center = Vector3.Center(min, max);
-            camera.setTarget(center);
-            const modelSize = Vector3.Distance(min, max);
-            camera.radius = Math.max(modelSize * 1.2, 1); 
-            if(camera.radius === 0) camera.radius = 10; 
-
-            const groundMesh = scene.getMeshByName("grid");
-            if(groundMesh) {
-                groundMesh.position.y = min.y - 0.01; // Position grid just below the model
-            }
-             // If the model defines its own skybox or environment, we might prefer it.
-            // However, for simplicity, we'll ensure our default environment is active.
-            // If a model brings its own environment, `scene.createDefaultEnvironment` might have less effect
-            // or we might need to explicitly remove the model's environment.
-            // For now, we assume our default environment is desired.
-            if (scene.environmentTexture) scene.environmentTexture.dispose();
-            scene.createDefaultEnvironment({ createSkybox: true, skyboxSize: Math.max(modelSize * 5, 1000), createGround: false });
-
-
-          } else { // No valid meshes found or bounding box is infinite
-             camera.setTarget(Vector3.Zero());
-             camera.radius = 10; 
-             const groundMesh = scene.getMeshByName("grid");
-             if(groundMesh) groundMesh.position.y = 0;
-             if (scene.environmentTexture) scene.environmentTexture.dispose();
-             scene.createDefaultEnvironment({ createSkybox: true, skyboxSize: 1000, createGround: false });
-          }
+        } else {
+            resetCameraAndEnvironment(scene, camera);
         }
+
         onModelLoaded(true);
         setIsCurrentModelActuallyLoaded(true); 
 
@@ -288,7 +291,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     !(child instanceof HemisphericLight) && 
                     !(child instanceof ArcRotateCamera) &&
                     child.name !== "grid" && 
-                    !child.name.startsWith("hdrSkyBox") && // Don't include default skybox
+                    !child.name.startsWith("hdrSkyBox") && 
                     !(child.name.startsWith("__") && child.name.endsWith("__")) 
                 )
                 .map(buildNodeHierarchy);
@@ -306,7 +309,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                 node.name !== "grid" &&
                 node.name !== "camera" && 
                 !node.name.startsWith("light") &&
-                !node.name.startsWith("hdrSkyBox") && // Don't include default skybox
+                !node.name.startsWith("hdrSkyBox") && 
                 !(node.name.startsWith("__") && node.name.endsWith("__")) &&
                 !(node instanceof HemisphericLight) && 
                 !(node instanceof ArcRotateCamera)
@@ -315,6 +318,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             
           onModelHierarchyReady(hierarchyRoots);
         }
+        // Apply initial rendering mode after model is loaded and framed
         applyRenderingModeStyle(renderingMode); 
       })
       .catch(error => {
@@ -337,14 +341,14 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             loadedAssetContainerRef.current.dispose();
             loadedAssetContainerRef.current = null;
         }
-        if (scene.environmentTexture) scene.environmentTexture.dispose();
-        scene.createDefaultEnvironment({ createSkybox: true, skyboxSize: 1000, createGround: false }); // Reset env for next load
+        resetCameraAndEnvironment(scene, camera);
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, renderingMode]); 
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, renderingMode, applyRenderingModeStyle]); // Added renderingMode & applyRenderingModeStyle for initial application
 
 
   useEffect(() => {
+    // This effect specifically handles changes to renderingMode for an already loaded model.
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode);
     }
