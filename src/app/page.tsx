@@ -35,10 +35,10 @@ export default function Home() {
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cameraRef = useRef<ArcRotateCamera | null>(null); // Retain for potential future use, though not directly manipulated from here
+  const cameraRef = useRef<ArcRotateCamera | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  
+
   const [modelName, setModelName] = useState<string | null>(null);
   const [modelHierarchy, setModelHierarchy] = useState<ModelNode[]>([]);
   const [currentFps, setCurrentFps] = useState<number>(0);
@@ -54,11 +54,11 @@ export default function Home() {
     const initialSystemIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
     if (storedTheme) {
-        setTheme(storedTheme); // This will trigger the other useEffect to set effectiveTheme
-    } else { // No stored theme, use system
-        setTheme('system'); // This will trigger the other useEffect to set effectiveTheme
+        setTheme(storedTheme);
+    } else {
+        setTheme('system');
     }
-    // Set initial effective theme based on what will be applied
+
      if (storedTheme === 'dark' || (!storedTheme && initialSystemIsDark)) {
       setEffectiveTheme('dark');
     } else {
@@ -87,7 +87,7 @@ export default function Home() {
       setEffectiveTheme('dark');
     } else { // system
       localStorage.removeItem("theme");
-      applySystemTheme(); 
+      applySystemTheme();
 
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       const handleChange = () => {
@@ -102,16 +102,16 @@ export default function Home() {
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setSelectedFileName(file.name); 
-      setModelName(file.name); 
+      setSelectedFileName(file.name);
+      setModelName(file.name);
 
       const nameParts = file.name.split('.');
       const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
       setModelFileExtension(ext);
-      
+
       setError(null);
       setIsLoading(true);
-      setSubmittedModelUrl(null); 
+      setSubmittedModelUrl(null);
       setModelHierarchy([]);
 
       const reader = new FileReader();
@@ -146,8 +146,7 @@ export default function Home() {
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (GLB, GLTF, OBJ).", variant: "destructive" });
       setModelHierarchy([]);
     } else {
-      setError(null); 
-      // Toast for successful load is removed to prevent repetition. Could be re-added if desired for first load only.
+      setError(null);
     }
   }, [toast]);
 
@@ -158,7 +157,7 @@ export default function Home() {
   const handleModelHierarchyReady = useCallback((hierarchy: ModelNode[]) => {
     setModelHierarchy(hierarchy);
   }, []);
-  
+
   const handleFpsUpdate = useCallback((fps: number) => {
     setCurrentFps(Math.round(fps));
   }, []);
@@ -180,7 +179,7 @@ export default function Home() {
             <FileText className="h-4 w-4" />
             <span className="sr-only">Documentation</span>
           </Button>
-          
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
@@ -233,8 +232,7 @@ export default function Home() {
                   </DropdownMenuRadioItem>
                   <DropdownMenuRadioItem value="system" className="text-xs">
                     <Laptop className="mr-2 h-3.5 w-3.5" /> System
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
+                  </DropdownMenuRadioGroup>
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -246,7 +244,7 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="flex flex-row flex-grow overflow-hidden"> 
+      <div className="flex flex-row flex-grow overflow-hidden">
         {/* Left Panel ("Model Explorer") */}
         <aside className="w-72 bg-card/70 backdrop-blur-md border-r border-border flex flex-col p-0 shadow-lg">
           <div className="p-3 border-b border-border flex items-center justify-between h-12">
@@ -271,8 +269,9 @@ export default function Home() {
                 </div>
               ) : modelName && !error ? (
                  <div className="p-2 space-y-1">
-                    <p className="text-sm font-semibold text-foreground">Name: <span className="font-normal text-muted-foreground">{modelName}</span></p>
-                    <p className="text-sm font-semibold text-foreground">Path: <span className="font-normal text-muted-foreground break-all">{selectedFileName}</span></p>
+                    <p className="text-sm font-semibold text-foreground">Filename: <span className="font-normal text-muted-foreground">{modelName}</span></p>
+                    <p className="text-sm font-semibold text-foreground">File Path: <span className="font-normal text-muted-foreground break-all">{selectedFileName}</span></p>
+                    {modelFileExtension && <p className="text-sm font-semibold text-foreground">File Format: <span className="font-normal text-muted-foreground">{modelFileExtension.toUpperCase()}</span></p>}
                  </div>
               ) : null }
             </TabsContent>
@@ -306,12 +305,12 @@ export default function Home() {
                 ref={fileInputRef}
                 onChange={handleFileSelected}
                 className="hidden"
-                accept=".glb,.gltf,.obj" 
+                accept=".glb,.gltf,.obj"
                 aria-label="3D Model File"
             />
             {!submittedModelUrl && !isLoading && !error && (
                 <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
-                    <div 
+                    <div
                         className="flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer backdrop-blur-md"
                         onClick={triggerFileDialog}
                     >
@@ -330,7 +329,7 @@ export default function Home() {
                 </div>
             )}
 
-            {(submittedModelUrl || isLoading || error) && ( 
+            {(submittedModelUrl || isLoading || error) && (
               <BabylonViewer
                   modelUrl={submittedModelUrl}
                   modelFileExtension={modelFileExtension}
@@ -357,7 +356,7 @@ export default function Home() {
                 </div>
             )}
 
-            {!isLoading && error && ( 
+            {!isLoading && error && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-20 p-4">
                   <div className="bg-card p-8 rounded-lg shadow-xl text-center max-w-md">
                     <AlertTriangle className="w-16 h-16 text-destructive mb-4 mx-auto" />
@@ -372,7 +371,7 @@ export default function Home() {
                   </div>
                 </div>
             )}
-            
+
             {submittedModelUrl && !isLoading && !error && (
               <>
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card/80 backdrop-blur-md rounded-md border border-border shadow-md text-xs text-muted-foreground">
@@ -392,4 +391,3 @@ export default function Home() {
     </div>
   );
 }
-    
