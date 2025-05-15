@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop, Grid } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
@@ -46,50 +46,56 @@ export default function Home() {
   const [farClip, setFarClip] = useState<number>(2000);
   const [theme, setTheme] = useState<Theme>("system");
   const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>('light');
+  const [isGridVisible, setIsGridVisible] = useState<boolean>(true);
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("theme") as Theme | null;
     const initialSystemIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
+    let currentTheme: Theme = 'system';
     if (storedTheme) {
-        setTheme(storedTheme);
-    } else {
-        setTheme('system');
+        currentTheme = storedTheme;
     }
+    setTheme(currentTheme);
 
-     if (storedTheme === 'dark' || (!storedTheme && initialSystemIsDark)) {
+    if (currentTheme === 'dark' || (currentTheme === 'system' && initialSystemIsDark)) {
+      document.documentElement.classList.add("dark");
       setEffectiveTheme('dark');
     } else {
+      document.documentElement.classList.remove("dark");
       setEffectiveTheme('light');
     }
   }, []);
 
   useEffect(() => {
-    const applySystemTheme = () => {
-      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        document.documentElement.classList.add("dark");
-        setEffectiveTheme('dark');
-      } else {
+    const applyThemeSettings = () => {
+      if (theme === "light") {
         document.documentElement.classList.remove("dark");
+        localStorage.setItem("theme", "light");
         setEffectiveTheme('light');
+      } else if (theme === "dark") {
+        document.documentElement.classList.add("dark");
+        localStorage.setItem("theme", "dark");
+        setEffectiveTheme('dark');
+      } else { // system
+        localStorage.removeItem("theme");
+        const systemIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (systemIsDark) {
+          document.documentElement.classList.add("dark");
+          setEffectiveTheme('dark');
+        } else {
+          document.documentElement.classList.remove("dark");
+          setEffectiveTheme('light');
+        }
       }
     };
 
-    if (theme === "light") {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-      setEffectiveTheme('light');
-    } else if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-      setEffectiveTheme('dark');
-    } else { // system
-      localStorage.removeItem("theme");
-      applySystemTheme();
+    applyThemeSettings(); // Apply on initial theme set or change
 
+    if (theme === 'system') {
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       const handleChange = () => {
-          applySystemTheme();
+        applyThemeSettings(); // Re-apply if system preference changes
       };
       mediaQuery.addEventListener("change", handleChange);
       return () => mediaQuery.removeEventListener("change", handleChange);
@@ -145,7 +151,6 @@ export default function Home() {
       setModelHierarchy([]);
     } else {
       setError(null);
-      // toast({ title: "Success", description: "Model loaded successfully." }); // Removed to avoid repetitive toasts
     }
   }, [toast]);
 
@@ -320,7 +325,6 @@ export default function Home() {
                         <p className="text-xs text-muted-foreground">
                             Supported formats: .glb, .gltf, .obj
                         </p>
-                         {/* Hidden button, onClick handled by parent div */}
                         <Button variant="link" size="sm" className="mt-2 text-accent invisible">
                           Or click to select a file
                         </Button>
@@ -339,8 +343,24 @@ export default function Home() {
                   nearClip={nearClip}
                   farClip={farClip}
                   effectiveTheme={effectiveTheme}
+                  isGridVisible={isGridVisible}
               />
             )}
+            
+            {submittedModelUrl && !isLoading && !error && (
+              <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+                <Button
+                  variant={isGridVisible ? "secondary" : "outline"}
+                  size="icon"
+                  onClick={() => setIsGridVisible(!isGridVisible)}
+                  title={isGridVisible ? "Hide Grid" : "Show Grid"}
+                  className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                >
+                  <Grid className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
 
             {isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-30">
@@ -387,5 +407,4 @@ export default function Home() {
       </footer>
     </div>
   );
-
-    
+}
