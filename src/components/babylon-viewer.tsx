@@ -58,12 +58,13 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if (!container || !sceneRef.current) return;
 
     container.meshes.forEach((mesh: AbstractMesh) => {
-      if (mesh.name === "grid") { 
+      if (mesh.name === "grid") { // Explicitly skip the grid mesh
         return;
       }
 
       if (mesh.material) {
         const processMaterial = (mat: Material) => {
+          // Defaults for 'shaded'
           mat.wireframe = false;
           if (mat instanceof PBRMaterial) {
             mat.unlit = false; 
@@ -71,6 +72,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             mat.disableLighting = false;
           }
 
+          // Apply specific mode
           if (mode === 'wireframe') {
             mat.wireframe = true;
           } else if (mode === 'non-shaded') {
@@ -118,13 +120,13 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     gridMaterial.majorUnitFrequency = 10;
     gridMaterial.minorUnitVisibility = 0.45;
     gridMaterial.gridRatio = 1;
-    gridMaterial.mainColor = Color3.FromHexString("#333333"); 
-    gridMaterial.lineColor = Color3.FromHexString("#595959"); 
+    gridMaterial.mainColor = Color3.FromHexString("#545454"); // Area between lines - made lighter
+    gridMaterial.lineColor = Color3.FromHexString("#5F5F5F"); // Major grid lines - made lighter
     gridMaterial.opacity = 0.98;
     gridMaterial.useMaxLine = true;
     ground.material = gridMaterial;
     ground.isPickable = false;
-    ground.position.y = 0;
+    ground.position.y = 0; // Ensure grid is at y=0
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -147,6 +149,11 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     return () => {
       resizeObserver.disconnect();
       if (sceneRef.current) {
+        // Dispose of meshes and materials created in this effect
+        const gridMesh = sceneRef.current.getMeshByName("grid");
+        if (gridMesh) {
+            gridMesh.dispose(false, true); // Dispose mesh and its material
+        }
         sceneRef.current.dispose(); 
         sceneRef.current = null;
       }
@@ -162,7 +169,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if (!scene || !onModelLoaded) return; 
 
     setIsCurrentModelActuallyLoaded(false);
-    if (onModelHierarchyReady) onModelHierarchyReady([]); // Clear hierarchy
+    if (onModelHierarchyReady) onModelHierarchyReady([]);
 
     if (loadedAssetContainerRef.current) {
       loadedAssetContainerRef.current.dispose();
@@ -177,6 +184,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             camera.alpha = -Math.PI / 2;
             camera.beta = Math.PI / 2.5;
         }
+        // Ensure grid is visible even if no model is loaded
+        const grid = scene.getMeshByName("grid");
+        if (grid) grid.setEnabled(true);
         return;
     }
 
@@ -184,17 +194,25 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
     const pluginExtension = modelFileExtension || undefined; 
 
+    // Hide grid while loading new model to avoid flicker if model is large
+    const gridMesh = scene.getMeshByName("grid");
+    if (gridMesh) gridMesh.setEnabled(false);
+
+
     SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginExtension)
       .then(container => {
         loadedAssetContainerRef.current = container;
         container.addAllToScene();
+        if (gridMesh) gridMesh.setEnabled(true); // Show grid again
         
         if (container.meshes.length > 0 && scene.activeCamera) {
           const camera = scene.activeCamera as ArcRotateCamera;
+          // Calculate bounding box of the loaded model
           let min = new Vector3(Infinity, Infinity, Infinity);
           let max = new Vector3(-Infinity, -Infinity, -Infinity);
 
           container.meshes.forEach((mesh: AbstractMesh) => {
+            // Ensure world matrix is computed for accurate bounding info
             mesh.computeWorldMatrix(true); 
             const boundingInfo = mesh.getBoundingInfo();
             if (boundingInfo) {
@@ -205,15 +223,26 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             }
           });
           
-          if (min.x !== Infinity) { 
+          if (min.x !== Infinity) { // Check if any bounds were actually computed
             const center = Vector3.Center(min, max);
             camera.setTarget(center);
+
             const modelSize = Vector3.Distance(min, max);
-            camera.radius = Math.max(modelSize * 1.2, 1); 
-            if (camera.radius === 0) camera.radius = 10; 
+            camera.radius = Math.max(modelSize * 1.2, 1); // Ensure radius is not too small
+            if (camera.radius === 0) camera.radius = 10; // Fallback if size is 0
+            
+            // Adjust grid position to be slightly below the model's lowest point if model is not at y=0
+            const ground = scene.getMeshByName("grid");
+            if(ground) {
+                ground.position.y = min.y - 0.01; // Place grid slightly below the model
+            }
+
           } else {
+             // Fallback if model has no clear bounds (e.g. empty GLTF)
              camera.setTarget(Vector3.Zero());
              camera.radius = 10;
+             const ground = scene.getMeshByName("grid");
+             if (ground) ground.position.y = 0; // Reset grid to origin
           }
         }
         onModelLoaded(true);
@@ -224,10 +253,15 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             let nodeType = "Node";
             if (babylonNode instanceof Mesh) nodeType = "Mesh";
             else if (babylonNode instanceof TransformNode) nodeType = "TransformNode";
-            // Could add more types like Light, Camera if they are part of the container's nodes
         
             const children = (babylonNode.getChildren ? babylonNode.getChildren() : [])
-                .filter(child => child.getScene() === scene && !(child instanceof HemisphericLight) && !(child instanceof ArcRotateCamera) && child.name !== "grid") 
+                .filter(child => 
+                    child.getScene() === scene && 
+                    !(child instanceof HemisphericLight) && 
+                    !(child instanceof ArcRotateCamera) && 
+                    child.name !== "grid" &&
+                    !(child.name.startsWith("__") && child.name.endsWith("__")) // Filter out typical root nodes from GLTF
+                ) 
                 .map(buildNodeHierarchy);
         
             return {
@@ -238,14 +272,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             };
           };
         
-          // Start from the container's root nodes. These are nodes at the top level of the loaded asset.
-          // Filter out scene setup elements more robustly
           const hierarchyRoots: ModelNode[] = container.rootNodes
             .filter(node => 
                 node.name !== "grid" && 
                 node.name !== "camera" && 
                 !node.name.startsWith("light") && 
-                !(node.name.startsWith("__") && node.name.endsWith("__")) && // Common for internal/root nodes
+                !(node.name.startsWith("__") && node.name.endsWith("__")) && // Common for internal/root nodes of GLTF
                 !(node instanceof HemisphericLight) &&
                 !(node instanceof ArcRotateCamera)
             )
@@ -271,7 +303,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
         onModelLoaded(false, userMessage);
         setIsCurrentModelActuallyLoaded(false);
-        if (loadedAssetContainerRef.current) { 
+        if (gridMesh) gridMesh.setEnabled(true); // Show grid again even if model fails
+        if (loadedAssetContainerRef.current) { // Ensure previous container is disposed if new load fails
             loadedAssetContainerRef.current.dispose();
             loadedAssetContainerRef.current = null;
         }
