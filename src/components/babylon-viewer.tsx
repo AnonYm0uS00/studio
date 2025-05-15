@@ -18,12 +18,19 @@ import '@babylonjs/loaders/OBJ';  // For OBJ support
 
 interface BabylonViewerProps {
   modelUrl: string | null;
-  modelFileExtension: string | null; // To hint file type for data URIs
+  modelFileExtension: string | null; 
   onModelLoaded: (success: boolean, error?: string) => void;
   onCameraReady: (camera: ArcRotateCamera) => void;
+  onFpsUpdate?: (fps: number) => void;
 }
 
-export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, modelFileExtension, onModelLoaded, onCameraReady }) => {
+export const BabylonViewer: React.FC<BabylonViewerProps> = ({ 
+  modelUrl, 
+  modelFileExtension, 
+  onModelLoaded, 
+  onCameraReady,
+  onFpsUpdate 
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Nullable<Engine>>(null);
   const sceneRef = useRef<Nullable<Scene>>(null);
@@ -53,6 +60,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, modelFil
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
         sceneRef.current.render();
+        if (onFpsUpdate && engineRef.current) {
+          onFpsUpdate(engineRef.current.getFps());
+        }
       }
     });
 
@@ -78,7 +88,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, modelFil
         loadedAssetContainerRef.current = null;
       }
     };
-  }, [onCameraReady]);
+  }, [onCameraReady, onFpsUpdate]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -104,7 +114,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, modelFil
     const isDataUrl = modelUrl.startsWith('data:');
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
     
-    // For Data URLs, pass the file extension hint. For regular URLs, it can often be inferred.
     const pluginHint = isDataUrl ? (modelFileExtension || undefined) : undefined;
 
     SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginHint)
@@ -150,7 +159,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, modelFil
         } else if (typeof error === 'string') {
             userMessage = error;
         }
-        // Add advice for OBJ if it's an OBJ file and not a data URL (where MTL issues are harder to debug for user)
         if (modelFileExtension === '.obj' && !isDataUrl) {
              userMessage += " For OBJ files, ensure any .mtl material files and textures are accessible (usually in the same directory or correctly referenced).";
         }

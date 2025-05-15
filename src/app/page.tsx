@@ -2,11 +2,11 @@
 'use client';
 import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
-import { Vector3 } from '@babylonjs/core'; // Import Vector3
+import { Vector3 } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { RotateCcw, Move, ZoomIn, ZoomOut, AlertTriangle, IterationCcw, UploadCloud } from 'lucide-react';
+import { AlertTriangle, IterationCcw, UploadCloud } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
@@ -18,6 +18,7 @@ export default function Home() {
   const cameraRef = useRef<ArcRotateCamera | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [currentFps, setCurrentFps] = useState(0);
 
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -71,29 +72,13 @@ export default function Home() {
     cameraRef.current = camera;
   }, []);
 
-  const rotateCamera = (angleIncrement: number) => {
-    if (cameraRef.current) {
-      cameraRef.current.alpha += angleIncrement;
-    }
-  };
-
-  const panCamera = (axis: 'x' | 'y', amount: number) => {
-    if (cameraRef.current) {
-      const panSpeed = cameraRef.current.radius * 0.02; // Adjust pan speed based on camera distance
-      const direction = cameraRef.current.getDirection(axis === 'x' ? new Vector3(1,0,0) : new Vector3(0,1,0));
-      cameraRef.current.target.addInPlace(direction.scale(amount * panSpeed));
-    }
-  };
-  
-  const zoomCamera = (factor: number) => {
-    if (cameraRef.current) {
-      cameraRef.current.radius *= factor;
-    }
-  };
-
   const triggerFileDialog = () => {
     fileInputRef.current?.click();
   };
+
+  const handleFpsUpdate = useCallback((fps: number) => {
+    setCurrentFps(Math.round(fps));
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -126,6 +111,7 @@ export default function Home() {
           modelFileExtension={modelFileExtension}
           onModelLoaded={handleModelLoaded}
           onCameraReady={handleCameraReady}
+          onFpsUpdate={handleFpsUpdate}
         />
 
         {isLoading && (
@@ -167,22 +153,8 @@ export default function Home() {
       </main>
 
       {submittedModelUrl && !error && !isLoading && (
-        <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-20">
-          <Button onClick={() => rotateCamera(0.1)} variant="outline" size="icon" aria-label="Rotate Left" className="bg-card/80 hover:bg-card border-border">
-            <RotateCcw />
-          </Button>
-           <Button onClick={() => panCamera('y', 1)} variant="outline" size="icon" aria-label="Pan Up" className="bg-card/80 hover:bg-card border-border">
-            <Move className="transform rotate-[-90deg]" />
-          </Button>
-          <Button onClick={() => panCamera('y', -1)} variant="outline" size="icon" aria-label="Pan Down" className="bg-card/80 hover:bg-card border-border">
-            <Move className="transform rotate-[90deg]" />
-          </Button>
-          <Button onClick={() => zoomCamera(0.9)} variant="outline" size="icon" aria-label="Zoom In" className="bg-card/80 hover:bg-card border-border">
-            <ZoomIn />
-          </Button>
-          <Button onClick={() => zoomCamera(1.1)} variant="outline" size="icon" aria-label="Zoom Out" className="bg-card/80 hover:bg-card border-border">
-            <ZoomOut />
-          </Button>
+        <div className="absolute bottom-4 right-4 bg-card/90 text-card-foreground p-2 rounded-md shadow-md border border-border z-20 text-sm">
+          FPS: {currentFps}
         </div>
       )}
     </div>
