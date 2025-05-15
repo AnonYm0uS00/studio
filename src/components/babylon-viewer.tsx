@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useEffect, useRef } from 'react';
 import {
@@ -13,9 +14,11 @@ import {
   Nullable,
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF'; // For GLTF/GLB support
+import '@babylonjs/loaders/OBJ';  // For OBJ support
+// FBX support was removed due to import issues.
 
 interface BabylonViewerProps {
-  modelUrl: string | null;
+  modelUrl: string | null; // Can now be a Data URL or an http(s) URL
   onModelLoaded: (success: boolean, error?: string) => void;
   onCameraReady: (camera: ArcRotateCamera) => void;
 }
@@ -70,6 +73,11 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
         engineRef.current.dispose();
         engineRef.current = null;
       }
+       // Clean up asset container on component unmount or before loading new model
+      if (loadedAssetContainerRef.current) {
+        loadedAssetContainerRef.current.dispose();
+        loadedAssetContainerRef.current = null;
+      }
     };
   }, [onCameraReady]);
 
@@ -82,10 +90,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
       loadedAssetContainerRef.current.dispose();
       loadedAssetContainerRef.current = null;
     }
-
+    
+    // If modelUrl is null (e.g. no file selected yet, or file cleared), clear the scene and reset camera
     if (!modelUrl) {
-        // If modelUrl is null, clear the scene (already handled by disposing above)
-        // and ensure camera is reset or in a default state if needed.
         const camera = scene.activeCamera as ArcRotateCamera;
         if (camera) {
             camera.target = Vector3.Zero();
@@ -93,11 +100,21 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
             camera.alpha = -Math.PI / 2;
             camera.beta = Math.PI / 2.5;
         }
+        // Call onModelLoaded with success:true but no model to clear any previous error states in parent
+        onModelLoaded(true, undefined); 
         return;
     }
 
+    // Determine if the modelUrl is a Data URL
+    const isDataUrl = modelUrl.startsWith('data:');
+    const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
+    
+    // For Data URLs, the file extension needs to be hinted for some loaders (especially OBJ with MTLs)
+    // However, LoadAssetContainerAsync usually infers this well.
+    // We pass an empty string for the scene filename when it's a Data URL.
+    const sceneFilename = isDataUrl ? "" : undefined;
 
-    SceneLoader.LoadAssetContainerAsync(modelUrl, "", scene)
+    SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, sceneFilename ? undefined : ".glb") // Provide a hint if no filename from URL
       .then(container => {
         loadedAssetContainerRef.current = container;
         container.addAllToScene();
@@ -105,12 +122,10 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
         if (container.meshes.length > 0 && scene.activeCamera) {
           const camera = scene.activeCamera as ArcRotateCamera;
           
-          // Calculate bounding box for all meshes in the container
           let min = new Vector3(Infinity, Infinity, Infinity);
           let max = new Vector3(-Infinity, -Infinity, -Infinity);
 
-          container.meshes.forEach((mesh) => {
-            // Ensure world matrix is computed before getting bounding info
+          container.meshes.forEach((mesh: AbstractMesh) => {
             mesh.computeWorldMatrix(true); 
             const boundingInfo = mesh.getBoundingInfo();
             if (boundingInfo) {
@@ -121,14 +136,13 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
             }
           });
           
-          if (min.x !== Infinity) { // Check if any bounding box was found
+          if (min.x !== Infinity) { 
             const center = Vector3.Center(min, max);
             camera.setTarget(center);
 
             const distance = Vector3.Distance(min, max);
-            camera.radius = Math.max(distance * 1.5, 1); // Ensure radius is not too small
+            camera.radius = Math.max(distance * 1.5, 1); 
           } else {
-            // Fallback if no bounding info (e.g. empty meshes)
              camera.setTarget(Vector3.Zero());
              camera.radius = 10;
           }
@@ -137,10 +151,22 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({ modelUrl, onModelL
       })
       .catch(error => {
         console.error("Error loading model:", error);
-        onModelLoaded(false, error.message || "Unknown error during model loading.");
+        let userMessage = "Unknown error during model loading.";
+        if (error.message) {
+            userMessage = error.message;
+        } else if (typeof error === 'string') {
+            userMessage = error;
+        }
+        // Try to give a more specific error for common issues
+        if (modelUrl.includes('.obj') && !isDataUrl) { // check includes for data URLs
+             userMessage += " For OBJ files, ensure any .mtl material files and textures are accessible (usually in the same directory or correctly referenced).";
+        }
+
+        onModelLoaded(false, userMessage);
       });
 
-  }, [modelUrl, onModelLoaded]);
+  }, [modelUrl, onModelLoaded, sceneRef]); // Ensure sceneRef is a dependency if its current value is used
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
+    
