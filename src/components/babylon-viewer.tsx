@@ -12,9 +12,13 @@ import {
   AssetContainer,
   Color4,
   Nullable,
+  MeshBuilder,
+  Color3,
 } from '@babylonjs/core';
+import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF'; // For GLTF/GLB support
 import '@babylonjs/loaders/OBJ';  // For OBJ support
+
 
 interface BabylonViewerProps {
   modelUrl: string | null;
@@ -56,6 +60,20 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
     new HemisphericLight("light2", new Vector3(-1, -1, -0.5), scene);
 
+    // Create grid
+    const ground = MeshBuilder.CreateGround("grid", {width: 1000, height: 1000, subdivisions: 100}, scene);
+    const gridMaterial = new GridMaterial("gridMaterial", scene);
+    gridMaterial.majorUnitFrequency = 10; // Every 10 units
+    gridMaterial.minorUnitVisibility = 0.45; // How visible minor lines are
+    gridMaterial.gridRatio = 1; // Size of each grid cell
+    gridMaterial.mainColor = Color3.FromHexString("#333333"); // Color of the grid plane (between lines)
+    gridMaterial.lineColor = Color3.FromHexString("#595959"); // Color of the major grid lines
+    gridMaterial.opacity = 0.98; // Slightly transparent
+    gridMaterial.useMaxLine = true; // Emphasize main X/Z axis lines
+    ground.material = gridMaterial;
+    ground.isPickable = false;
+    ground.position.y = 0; // Ensure grid is at the base
+
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -75,6 +93,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     return () => {
       resizeObserver.disconnect();
+      // scene.dispose will also dispose meshes and materials like ground and gridMaterial
       if (sceneRef.current) {
         sceneRef.current.dispose();
         sceneRef.current = null;
@@ -159,9 +178,13 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         } else if (typeof error === 'string') {
             userMessage = error;
         }
-        if (modelFileExtension === '.obj' && !isDataUrl) {
-             userMessage += " For OBJ files, ensure any .mtl material files and textures are accessible (usually in the same directory or correctly referenced).";
+        if (pluginHint === '.obj' && !isDataUrl) { // Check pluginHint instead of modelFileExtension for data URLs
+             userMessage += " For OBJ files from a URL, ensure any .mtl material files and textures are accessible (usually in the same directory or correctly referenced).";
         }
+         else if (pluginHint === '.obj' && isDataUrl) {
+             userMessage += " For OBJ files loaded from local disk, .mtl files and textures are typically not packaged within the .obj data URI and may not load. Consider using GLB format for self-contained models.";
+        }
+
 
         onModelLoaded(false, userMessage);
       });
