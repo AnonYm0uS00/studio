@@ -2,7 +2,7 @@
 'use client';
 import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
-import { Vector3 } from '@babylonjs/core';
+import { Vector3 } from '@babylonjs/core'; // Ensure Vector3 is imported if panCamera is ever re-added
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer, type RenderingMode } from '@/components/babylon-viewer';
@@ -11,7 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
 import { ModelHierarchyView } from '@/components/model-hierarchy-view';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+// Accordion was removed, but if needed for other parts, it would be imported here.
+// import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
 export default function Home() {
@@ -33,7 +34,7 @@ export default function Home() {
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setSelectedFileName(file.name);
+      setSelectedFileName(file.name); // Set selectedFileName
       setModelName(file.name); 
 
       const nameParts = file.name.split('.');
@@ -78,8 +79,7 @@ export default function Home() {
       setModelHierarchy([]);
     } else {
       setError(null); 
-      // Toast for successful load is now handled by the re-render if needed, or can be added here explicitly if desired for every load
-      // For now, let's keep it silent on success to avoid toasts on rendering mode changes.
+      // Toast for successful load handled by re-render or can be explicit if desired
     }
   }, [toast]);
 
@@ -187,7 +187,7 @@ export default function Home() {
                 aria-label="3D Model File"
             />
             {!submittedModelUrl && !isLoading && !error && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 cursor-pointer" onClick={triggerFileDialog}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 cursor-pointer bg-background" onClick={triggerFileDialog}>
                     <div className="flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4">
                         <UploadCloud className="h-10 w-10 text-primary" />
                     </div>
@@ -214,7 +214,7 @@ export default function Home() {
             )}
 
             {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-30">
+                <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-30 backdrop-blur-sm">
                 <div className="flex flex-col items-center">
                     <svg className="animate-spin h-10 w-10 text-primary mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -227,7 +227,7 @@ export default function Home() {
             )}
 
             {!isLoading && error && ( 
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-20 p-4">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-20 p-4 backdrop-blur-sm">
                 <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
                 <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Model</h2>
                 <p className="text-muted-foreground text-center max-w-md">{error}</p>
@@ -239,36 +239,11 @@ export default function Home() {
                 </Button>
                 </div>
             )}
-             {/* Rendering Mode Toggles & FPS Display - only when model is loaded and no error */}
+            
+            {/* FPS Display - only when model is loaded and no error */}
             {submittedModelUrl && !isLoading && !error && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 p-2 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md">
-                <Button
-                  variant={renderingMode === 'shaded' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setRenderingMode('shaded')}
-                  className="text-xs h-7 px-2"
-                >
-                  Shaded
-                </Button>
-                <Button
-                  variant={renderingMode === 'non-shaded' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setRenderingMode('non-shaded')}
-                  className="text-xs h-7 px-2"
-                >
-                  Non-Shaded
-                </Button>
-                <Button
-                  variant={renderingMode === 'wireframe' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setRenderingMode('wireframe')}
-                  className="text-xs h-7 px-2"
-                >
-                  Wireframe
-                </Button>
-                 <div className="ml-2 text-xs text-muted-foreground border-l border-border pl-2">
-                    FPS: {currentFps}
-                </div>
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card rounded-md border border-border shadow-sm text-xs text-muted-foreground">
+                 FPS: {currentFps}
               </div>
             )}
         </main>
@@ -283,6 +258,4 @@ export default function Home() {
     </div>
   );
 }
-    
-
     
