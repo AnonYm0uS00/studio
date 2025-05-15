@@ -1,5 +1,6 @@
+
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,16 @@ export default function Home() {
   const cameraRef = useRef<ArcRotateCamera | null>(null);
   const { toast } = useToast();
 
+  // Automatically set the initial model to be loaded
+  useEffect(() => {
+    if (modelUrlInput && !submittedModelUrl) {
+      setSubmittedModelUrl(modelUrlInput);
+      // We don't set setIsLoading(true) here because this is an automatic initial load.
+      // The BabylonViewer will show a blank canvas while loading.
+      // The isLoading state is primarily for user-initiated loads via the button.
+    }
+  }, [modelUrlInput, submittedModelUrl]);
+
   const handleLoadModel = () => {
     if (!modelUrlInput.trim()) {
       toast({ title: "Error", description: "Please enter a model URL.", variant: "destructive" });
@@ -25,21 +36,20 @@ export default function Home() {
     setSubmittedModelUrl(modelUrlInput);
   };
 
-  const handleModelLoaded = (success: boolean, errorMessage?: string) => {
+  const handleModelLoaded = useCallback((success: boolean, errorMessage?: string) => {
     setIsLoading(false);
     if (!success) {
       setError(errorMessage || "Failed to load model.");
       toast({ title: "Load Error", description: errorMessage || "Failed to load model.", variant: "destructive" });
-      // Do not clear submittedModelUrl here, BabylonViewer will handle retries or show empty if it's permanently bad
     } else {
       setError(null); // Clear previous errors on successful load
       toast({ title: "Success", description: "Model loaded successfully." });
     }
-  };
+  }, [toast]);
 
-  const handleCameraReady = (camera: ArcRotateCamera) => {
+  const handleCameraReady = useCallback((camera: ArcRotateCamera) => {
     cameraRef.current = camera;
-  };
+  }, []);
 
   const rotateCamera = (angleIncrement: number) => {
     if (cameraRef.current) {
@@ -49,7 +59,7 @@ export default function Home() {
 
   const panCamera = (axis: 'x' | 'y', amount: number) => {
     if (cameraRef.current) {
-      const panSpeed = cameraRef.current.radius * 0.02; // Adjust speed based on zoom
+      const panSpeed = cameraRef.current.radius * 0.02; 
       const direction = cameraRef.current.getDirection(axis === 'x' ? new BABYLON.Vector3(1,0,0) : new BABYLON.Vector3(0,1,0));
       cameraRef.current.target.addInPlace(direction.scale(amount * panSpeed));
     }
@@ -91,6 +101,7 @@ export default function Home() {
           onModelLoaded={handleModelLoaded}
           onCameraReady={handleCameraReady}
         />
+
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-30">
             <div className="flex flex-col items-center">
@@ -102,7 +113,8 @@ export default function Home() {
             </div>
           </div>
         )}
-        {error && !isLoading && !submittedModelUrl && ( /* Show error only if no model is trying to be displayed or loading */
+
+        {!isLoading && error && ( 
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-20 p-4">
             <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
             <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Model</h2>
@@ -112,7 +124,8 @@ export default function Home() {
             </p>
           </div>
         )}
-         {!submittedModelUrl && !isLoading && !error && (
+
+        {!isLoading && !error && !submittedModelUrl && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background z-20 p-4">
             <IterationCcw className="w-24 h-24 text-muted-foreground mb-6" />
             <h2 className="text-2xl font-semibold text-foreground mb-2">Welcome to Open3D Viewer</h2>
@@ -126,7 +139,7 @@ export default function Home() {
         )}
       </main>
 
-      {submittedModelUrl && !error && (
+      {submittedModelUrl && !error && !isLoading && (
         <div className="absolute bottom-4 right-4 flex flex-col gap-2 z-20">
           <Button onClick={() => rotateCamera(0.1)} variant="outline" size="icon" aria-label="Rotate Left" className="bg-card/80 hover:bg-card border-border">
             <RotateCcw />
