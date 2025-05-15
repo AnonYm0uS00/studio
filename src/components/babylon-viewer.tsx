@@ -133,8 +133,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     scene.clearColor = new Color4(0, 0, 0, 0); 
 
     const camera = new ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, Vector3.Zero(), scene);
-    camera.minZ = nearClip;
-    camera.maxZ = farClip;
+    camera.minZ = nearClip; // Initial set from prop
+    camera.maxZ = farClip;  // Initial set from prop
     camera.attachControl(canvasRef.current, true);
     camera.wheelPrecision = 50;
     camera.lowerRadiusLimit = 0.1;
@@ -202,7 +202,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         engineRef.current = null;
       }
     };
-  }, [onCameraReady, onFpsUpdate, nearClip, farClip]); // Added nearClip, farClip
+  // IMPORTANT: Removed nearClip and farClip from this dependency array
+  }, [onCameraReady, onFpsUpdate]); 
 
   useEffect(() => {
     const activeCamera = sceneRef.current?.activeCamera;
@@ -358,7 +359,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         resetCameraAndEnvironment(scene, camera);
       });
 
-  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, renderingMode]);
+  }, [modelUrl, modelFileExtension, onModelLoaded, sceneRef, onModelHierarchyReady, applyRenderingModeStyle, renderingMode]); // renderingMode & applyRenderingModeStyle included here to apply initially.
 
 
   useEffect(() => {
@@ -369,3 +370,4 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
+
