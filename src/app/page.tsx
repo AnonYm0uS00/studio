@@ -273,7 +273,7 @@ export default function Home() {
                 </div>
               ) : modelName && !error ? (
                  <div className="p-2 space-y-1">
-                    <p className="text-sm font-semibold text-foreground">Filename: <span className="font-normal text-muted-foreground">{modelName}</span></p>
+                    <p className="text-sm font-semibold text-foreground">Filename: <span className="font-normal text-muted-foreground">{modelName && (modelName.lastIndexOf('.') > 0 ? modelName.substring(0, modelName.lastIndexOf('.')) : modelName)}</span></p>
                     <p className="text-sm font-semibold text-foreground">File Path: <span className="font-normal text-muted-foreground break-all">{selectedFileName}</span></p>
                     {modelFileExtension && <p className="text-sm font-semibold text-foreground">File Format: <span className="font-normal text-muted-foreground">{modelFileExtension.toUpperCase()}</span></p>}
                  </div>
