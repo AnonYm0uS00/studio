@@ -2,11 +2,11 @@
 'use client';
 import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
-// import { Vector3 } from '@babylonjs/core'; // Not used directly in page.tsx anymore for camera controls
+// import { Vector3 } from '@babylonjs/core'; // Not used directly in page.tsx for camera controls, example removed
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon as Info, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
@@ -47,7 +47,6 @@ export default function Home() {
   const [farClip, setFarClip] = useState<number>(2000);
   const [theme, setTheme] = useState<Theme>("system");
   const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>('light');
-
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("theme") as Theme | null;
@@ -99,7 +98,7 @@ export default function Home() {
   }, [theme]);
 
 
-  const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFileName(file.name);
@@ -137,7 +136,7 @@ export default function Home() {
       setModelName(null);
       setModelHierarchy([]);
     }
-  };
+  }, [toast]);
 
   const handleModelLoaded = useCallback((success: boolean, errorMessage?: string) => {
     setIsLoading(false);
@@ -147,6 +146,7 @@ export default function Home() {
       setModelHierarchy([]);
     } else {
       setError(null);
+      // toast({ title: "Success", description: "Model loaded successfully." }); // Removed to avoid repetitive toasts
     }
   }, [toast]);
 
@@ -163,10 +163,9 @@ export default function Home() {
   }, []);
 
 
-  const triggerFileDialog = () => {
+  const triggerFileDialog = useCallback(() => {
     fileInputRef.current?.click();
-  };
-
+  }, []);
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -238,7 +237,7 @@ export default function Home() {
           </DropdownMenu>
 
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
-            <Info className="h-4 w-4" />
+            <InfoIcon className="h-4 w-4" />
             <span className="sr-only">Info</span>
           </Button>
         </div>
@@ -373,11 +372,9 @@ export default function Home() {
             )}
 
             {submittedModelUrl && !isLoading && !error && (
-              <>
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card/80 backdrop-blur-md rounded-md border border-border shadow-md text-xs text-muted-foreground">
                   FPS: {currentFps}
                 </div>
-              </>
             )}
         </main>
       </div>
@@ -391,3 +388,4 @@ export default function Home() {
     </div>
   );
 }
+
