@@ -2,7 +2,7 @@
 'use client';
 import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
-import { Vector3 } from '@babylonjs/core'; // Ensure Vector3 is imported if panCamera is ever re-added
+import { Vector3 } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer, type RenderingMode } from '@/components/babylon-viewer';
@@ -11,8 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
 import { ModelHierarchyView } from '@/components/model-hierarchy-view';
-// Accordion was removed, but if needed for other parts, it would be imported here.
-// import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
 export default function Home() {
@@ -34,7 +32,7 @@ export default function Home() {
   const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setSelectedFileName(file.name); // Set selectedFileName
+      setSelectedFileName(file.name); 
       setModelName(file.name); 
 
       const nameParts = file.name.split('.');
@@ -79,7 +77,6 @@ export default function Home() {
       setModelHierarchy([]);
     } else {
       setError(null); 
-      // Toast for successful load handled by re-render or can be explicit if desired
     }
   }, [toast]);
 
@@ -104,7 +101,7 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* Top Bar */}
-      <header className="h-12 flex-shrink-0 border-b border-border bg-card flex items-center px-4 justify-between">
+      <header className="h-12 flex-shrink-0 border-b border-border bg-card flex items-center px-4 justify-between shadow-md">
         <h1 className="text-lg font-semibold text-primary">3D Viewer</h1>
         <div className="text-sm text-muted-foreground">{modelName || "No model loaded"}</div>
         <div className="flex items-center gap-2">
@@ -125,7 +122,7 @@ export default function Home() {
 
       <div className="flex flex-row flex-grow overflow-hidden"> 
         {/* Left Panel ("Model Explorer") */}
-        <aside className="w-72 bg-card border-r border-border flex flex-col p-0">
+        <aside className="w-72 bg-card border-r border-border flex flex-col p-0 shadow-lg">
           <div className="p-3 border-b border-border flex items-center justify-between h-12">
             <h2 className="text-sm font-semibold text-primary">Model Explorer</h2>
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-7 w-7">
@@ -187,17 +184,22 @@ export default function Home() {
                 aria-label="3D Model File"
             />
             {!submittedModelUrl && !isLoading && !error && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 cursor-pointer bg-background" onClick={triggerFileDialog}>
-                    <div className="flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4">
-                        <UploadCloud className="h-10 w-10 text-primary" />
+                <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
+                    <div 
+                        className="flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer"
+                        onClick={triggerFileDialog}
+                    >
+                        <div className="flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4">
+                            <UploadCloud className="h-10 w-10 text-primary" />
+                        </div>
+                        <p className="text-lg font-medium text-foreground mb-1">Drag & Drop or Click to Upload</p>
+                        <p className="text-xs text-muted-foreground">
+                            Supported formats: .glb, .gltf, .obj
+                        </p>
+                        <Button variant="link" size="sm" className="mt-2 text-accent invisible"> {/* Hidden but keeps structure */}
+                          Or click to select a file
+                        </Button>
                     </div>
-                    <p className="text-lg font-medium text-foreground mb-1">Drag & Drop your 3D model here</p>
-                    <p className="text-xs text-muted-foreground">
-                        Supported formats: .glb, .gltf, .obj
-                    </p>
-                    <Button variant="link" size="sm" className="mt-2 text-accent">
-                      Or click to select a file
-                    </Button>
                 </div>
             )}
 
@@ -215,34 +217,36 @@ export default function Home() {
 
             {isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-30 backdrop-blur-sm">
-                <div className="flex flex-col items-center">
-                    <svg className="animate-spin h-10 w-10 text-primary mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <p className="text-foreground text-lg">Loading 3D Model...</p>
-                    {selectedFileName && <p className="text-muted-foreground text-sm">File: {selectedFileName}</p>}
-                </div>
+                  <div className="flex flex-col items-center bg-card p-8 rounded-lg shadow-xl">
+                      <svg className="animate-spin h-10 w-10 text-primary mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <p className="text-foreground text-lg">Loading 3D Model...</p>
+                      {selectedFileName && <p className="text-muted-foreground text-sm">File: {selectedFileName}</p>}
+                  </div>
                 </div>
             )}
 
             {!isLoading && error && ( 
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 z-20 p-4 backdrop-blur-sm">
-                <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
-                <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Model</h2>
-                <p className="text-muted-foreground text-center max-w-md">{error}</p>
-                <p className="text-muted-foreground text-sm mt-2">
-                    Please ensure the selected file is a valid 3D model (e.g., .glb, .gltf, .obj) and not corrupted.
-                </p>
-                <Button onClick={triggerFileDialog} variant="outline" size="sm" className="mt-4">
-                    Try a different file
-                </Button>
+                <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-20 p-4 backdrop-blur-sm">
+                  <div className="bg-card p-8 rounded-lg shadow-xl text-center max-w-md">
+                    <AlertTriangle className="w-16 h-16 text-destructive mb-4 mx-auto" />
+                    <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Model</h2>
+                    <p className="text-muted-foreground text-center">{error}</p>
+                    <p className="text-muted-foreground text-sm mt-2">
+                        Please ensure the selected file is a valid 3D model (e.g., .glb, .gltf, .obj) and not corrupted.
+                    </p>
+                    <Button onClick={triggerFileDialog} variant="outline" size="sm" className="mt-6">
+                        Try a different file
+                    </Button>
+                  </div>
                 </div>
             )}
             
             {/* FPS Display - only when model is loaded and no error */}
             {submittedModelUrl && !isLoading && !error && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card rounded-md border border-border shadow-sm text-xs text-muted-foreground">
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card rounded-md border border-border shadow-md text-xs text-muted-foreground">
                  FPS: {currentFps}
               </div>
             )}
@@ -250,7 +254,7 @@ export default function Home() {
       </div>
 
       {/* Bottom Bar */}
-      <footer className="h-8 flex-shrink-0 border-t border-border bg-card flex items-center px-4">
+      <footer className="h-8 flex-shrink-0 border-t border-border bg-card flex items-center px-4 shadow-md">
         <p className="text-xs text-muted-foreground">
             {isLoading ? "Loading model..." : error ? "Error loading model" : submittedModelUrl ? `Viewing: ${modelName}` : "Ready to load model"}
         </p>
