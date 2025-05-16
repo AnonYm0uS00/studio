@@ -472,35 +472,40 @@ export default function Home() {
 
             {submittedModelUrl && !isLoading && !error && (
               <>
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card/80 backdrop-blur-md rounded-md border border-border shadow-md text-xs text-muted-foreground">
-                  FPS: {currentFps}
+                {/* Bottom-Right Controls: Rendering Mode & FPS */}
+                <div className="absolute bottom-4 right-4 z-10 flex flex-col items-end gap-2">
+                  <div className="flex gap-1 p-1 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md">
+                    <Button
+                      variant={renderingMode === 'shaded' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setRenderingMode('shaded')}
+                      className="text-xs h-7 px-2"
+                    >
+                      Shaded
+                    </Button>
+                    <Button
+                      variant={renderingMode === 'non-shaded' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setRenderingMode('non-shaded')}
+                      className="text-xs h-7 px-2"
+                    >
+                      Non-Shaded
+                    </Button>
+                    <Button
+                      variant={renderingMode === 'wireframe' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setRenderingMode('wireframe')}
+                      className="text-xs h-7 px-2"
+                    >
+                      Wireframe
+                    </Button>
+                  </div>
+                  <div className="px-3 py-1.5 bg-card/80 backdrop-blur-md rounded-md border border-border shadow-md text-xs text-muted-foreground">
+                    FPS: {currentFps}
+                  </div>
                 </div>
-                <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-1 p-1 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md">
-                  <Button
-                    variant={renderingMode === 'shaded' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setRenderingMode('shaded')}
-                    className="text-xs h-7 px-2"
-                  >
-                    Shaded
-                  </Button>
-                  <Button
-                    variant={renderingMode === 'non-shaded' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setRenderingMode('non-shaded')}
-                    className="text-xs h-7 px-2"
-                  >
-                    Non-Shaded
-                  </Button>
-                  <Button
-                    variant={renderingMode === 'wireframe' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setRenderingMode('wireframe')}
-                    className="text-xs h-7 px-2"
-                  >
-                    Wireframe
-                  </Button>
-                </div>
+
+                {/* Bottom-Center Controls: Animations */}
                 {hasAnimations && (
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2 p-2 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md w-80">
                     <div className="flex items-center gap-2 w-full">
