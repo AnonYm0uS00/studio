@@ -89,7 +89,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     scene.createDefaultEnvironment({
         createSkybox: false,
-        skyboxSize: 1000, // Default size, will be adjusted if model loads
+        skyboxSize: 1000, 
         createGround: false
     });
   }, [sceneRef]);
@@ -98,32 +98,35 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   const applyRenderingModeStyle = useCallback((mode: RenderingMode, container: Nullable<AssetContainer>) => {
     if (!container || !sceneRef.current) return;
 
+    const processMaterial = (mat: Nullable<Material>) => {
+      if (!mat) return;
+
+      // Universal reset for wireframe
+      mat.wireframe = false;
+
+      // Handle PBRMaterial specific properties
+      if (mat instanceof PBRMaterial) {
+        mat.unlit = false; // Default for shaded
+        if (mode === 'non-shaded') {
+          mat.unlit = true;
+        }
+      } 
+      // Handle StandardMaterial specific properties
+      else if (mat instanceof StandardMaterial) {
+        mat.disableLighting = false; // Default for shaded
+        if (mode === 'non-shaded') {
+          mat.disableLighting = true;
+        }
+      }
+      
+      // Apply wireframe if mode is 'wireframe' for any material type
+      if (mode === 'wireframe') {
+        mat.wireframe = true;
+      }
+    };
+
     container.meshes.forEach((mesh: AbstractMesh) => {
-      if (mesh.name === "grid") return; // Skip the grid
-
-      const processMaterial = (mat: Nullable<Material>) => {
-        if (!mat) return;
-
-        // Reset to shaded by default
-        mat.wireframe = false;
-        if (mat instanceof PBRMaterial) {
-          mat.unlit = false;
-        } else if (mat instanceof StandardMaterial) {
-          mat.disableLighting = false;
-        }
-
-        // Apply specific mode
-        if (mode === 'wireframe') {
-          mat.wireframe = true;
-        } else if (mode === 'non-shaded') {
-          if (mat instanceof PBRMaterial) {
-            mat.unlit = true;
-          } else if (mat instanceof StandardMaterial) {
-            mat.disableLighting = true;
-          }
-        }
-        // 'shaded' is handled by the reset
-      };
+      if (mesh.name === "grid") return; 
 
       if (mesh.material) {
         if (mesh.material instanceof MultiMaterial) {
@@ -148,7 +151,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     camera.attachControl(canvasRef.current, true);
     camera.wheelPrecision = 50;
     camera.lowerRadiusLimit = 0.1;
-    camera.upperRadiusLimit = 20000;
+    camera.upperRadiusLimit = 20000; // Increased for potentially larger models
     onCameraReady(camera);
 
     if (sceneRef.current.environmentTexture) {
@@ -156,7 +159,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         sceneRef.current.environmentTexture = null;
     }
     sceneRef.current.createDefaultEnvironment({
-        createSkybox: false, // No visual skybox, IBL only
+        createSkybox: false, 
         skyboxSize: 1000,
         createGround: false,
     });
@@ -170,8 +173,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     gridMaterial.majorUnitFrequency = 10;
     gridMaterial.minorUnitVisibility = 0.45;
     gridMaterial.gridRatio = 1;
-    gridMaterial.mainColor = Color3.FromHexString("#545454");
-    gridMaterial.lineColor = Color3.FromHexString("#5F5F5F");
+    gridMaterial.mainColor = Color3.FromHexString("#545454"); 
+    gridMaterial.lineColor = Color3.FromHexString("#5F5F5F"); 
     gridMaterial.opacity = 0.98;
     gridMaterial.useMaxLine = true;
     ground.material = gridMaterial;
@@ -216,14 +219,14 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         engineRef.current = null;
       }
     };
-  }, [onCameraReady, onFpsUpdate]);
+  }, [onCameraReady, onFpsUpdate]); // Removed nearClip, farClip, effectiveTheme from here
 
   useEffect(() => {
     if (sceneRef.current) {
       if (effectiveTheme === 'light') {
-        sceneRef.current.clearColor = new Color4(240/255, 240/255, 240/255, 1); // Light gray
-      } else { // dark
-        sceneRef.current.clearColor = new Color4(38/255, 38/255, 38/255, 1); // Dark Gray #262626
+        sceneRef.current.clearColor = new Color4(240/255, 240/255, 240/255, 1); 
+      } else { 
+        sceneRef.current.clearColor = new Color4(38/255, 38/255, 38/255, 1); 
       }
     }
   }, [effectiveTheme, sceneRef]);
@@ -271,16 +274,15 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         container.addAllToScene();
 
         const allModelMeshes = container.meshes.filter(m => m.name !== "grid" && !(m instanceof HemisphericLight) && !(m instanceof ArcRotateCamera) && !m.name.startsWith("hdrSkyBox") && !(m.name.startsWith("__") && m.name.endsWith("__")));
-        let modelSize = 10; // Default model size for environment setup if no meshes found
+        let modelSize = 10; 
 
         if (allModelMeshes.length > 0) {
             const visibleEnabledMeshes = allModelMeshes.filter(m => m.isVisible && m.isEnabled());
 
             if (visibleEnabledMeshes.length > 0) {
-                visibleEnabledMeshes.forEach(mesh => mesh.computeWorldMatrix(true)); // Ensure world matrices are up-to-date
+                visibleEnabledMeshes.forEach(mesh => mesh.computeWorldMatrix(true)); 
                 camera.zoomOn(visibleEnabledMeshes, true);
 
-                // After zoomOn, calculate bounds to position grid and environment
                 let min = new Vector3(Infinity, Infinity, Infinity);
                 let max = new Vector3(-Infinity, -Infinity, -Infinity);
                 visibleEnabledMeshes.forEach((meshNode: AbstractMesh) => {
@@ -291,62 +293,56 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     }
                 });
 
-                if (min.x !== Infinity) { // Check if bounds were actually calculated
+                if (min.x !== Infinity) { 
                     modelSize = Vector3.Distance(min, max);
                     if(grid) {
-                        grid.position.y = min.y - 0.01; // Position grid just below the model
+                        grid.position.y = min.y - 0.01; 
                     }
                 } else {
-                    // No valid bounds, reset camera and environment
                     internalResetCameraAndEnvironment();
                     if(grid) grid.position.y = 0;
                 }
             } else {
-                // No visible/enabled meshes, reset camera and environment
                 internalResetCameraAndEnvironment();
                  if(grid) grid.position.y = 0;
             }
         } else {
-             // No meshes at all, reset camera and environment
             internalResetCameraAndEnvironment();
             if(grid) grid.position.y = 0;
         }
         
-        // Ensure old environment is disposed before creating new one
         if (scene.environmentTexture) {
             scene.environmentTexture.dispose();
             scene.environmentTexture = null;
         }
-        const existingSkyboxMesh = scene.getMeshByName("hdrSkyBox"); // Babylon names default skybox this
+        const existingSkyboxMesh = scene.getMeshByName("hdrSkyBox"); 
         if (existingSkyboxMesh) existingSkyboxMesh.dispose();
 
         scene.createDefaultEnvironment({
-            createSkybox: false, // No visual skybox
-            skyboxSize: Math.max(modelSize * 2, 2000), // Ensure environment is large enough
-            createGround: false, // We have our own grid
+            createSkybox: false, 
+            skyboxSize: Math.max(modelSize * 2, 2000), 
+            createGround: false, 
         });
-
-        applyRenderingModeStyle(renderingMode, container);
+        
         onModelLoaded(true);
-        setIsCurrentModelActuallyLoaded(true);
+        setIsCurrentModelActuallyLoaded(true); // Set this before calling applyRenderingModeStyle potentially via useEffect
 
         if (onModelHierarchyReady) {
           const buildNodeHierarchy = (babylonNode: Node): ModelNode => {
             let nodeType = "Node";
             if (babylonNode instanceof Mesh) nodeType = "Mesh";
             else if (babylonNode instanceof TransformNode) nodeType = "TransformNode";
-
+        
             const children = (babylonNode.getChildren ? babylonNode.getChildren() : [])
-                .filter(child =>
-                    child.getScene() === scene && // Ensure child is part of the current scene
+                .filter(child => // Filter out scene helpers from children traversal
+                    child.getScene() === scene && 
                     !(child instanceof HemisphericLight) &&
                     !(child instanceof ArcRotateCamera) &&
                     child.name !== "grid" &&
-                    !child.name.startsWith("hdrSkyBox") && // Filter out default environment parts
-                    !(child.name.startsWith("__") && child.name.endsWith("__")) // Filter out internal Babylon nodes
+                    !child.name.startsWith("hdrSkyBox")
                 )
                 .map(buildNodeHierarchy);
-
+        
             return {
               id: babylonNode.uniqueId.toString(),
               name: babylonNode.name || `Unnamed ${nodeType}`,
@@ -354,19 +350,20 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
               children: children,
             };
           };
-
+        
+          // Filter root nodes to exclude only specific scene helper objects
           const hierarchyRoots: ModelNode[] = container.rootNodes
             .filter(node =>
                 node.name !== "grid" &&
-                node.name !== "camera" && // Default camera
-                !node.name.startsWith("light") && // Default lights
+                node.name !== "camera" && 
+                !node.name.startsWith("light1") && // specific name for our light
+                !node.name.startsWith("light2") && // specific name for our light
                 !node.name.startsWith("hdrSkyBox") &&
-                !(node.name.startsWith("__") && node.name.endsWith("__")) && // Filter out internal Babylon nodes
-                !(node instanceof HemisphericLight) &&
-                !(node instanceof ArcRotateCamera)
+                !(node instanceof HemisphericLight) && // type check for any other lights
+                !(node instanceof ArcRotateCamera)  // type check for any other cameras
             )
             .map(buildNodeHierarchy);
-
+        
           onModelHierarchyReady(hierarchyRoots);
         }
       })
@@ -378,7 +375,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         } else if (typeof error === 'string') {
             userMessage = error;
         }
-        // Remove STL specific advice as it's no longer supported
         if (modelFileExtension && ['.obj'].includes(modelFileExtension) && isDataUrl) {
              userMessage += ` For ${modelFileExtension.toUpperCase()} files loaded from local disk, any associated material files (like .mtl) or external textures are typically not packaged within the data URI and may not load. Consider using GLB format for self-contained models.`;
         } else if (modelFileExtension && ['.obj'].includes(modelFileExtension) && !isDataUrl) {
@@ -386,8 +382,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
         onModelLoaded(false, userMessage);
         setIsCurrentModelActuallyLoaded(false);
-        if (grid) grid.position.y = 0; // Reset grid position on error
-        if (loadedAssetContainerRef.current) { // Clean up partially loaded assets if any
+        if (grid) grid.position.y = 0; 
+        if (loadedAssetContainerRef.current) { 
             loadedAssetContainerRef.current.removeAllFromScene();
             loadedAssetContainerRef.current.dispose();
             loadedAssetContainerRef.current = null;
@@ -395,28 +391,22 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         internalResetCameraAndEnvironment();
       });
 
-  // Dependencies:
-  // modelUrl, modelFileExtension: Trigger reload if the source changes.
-  // onModelLoaded, onModelHierarchyReady: Stable callbacks from parent.
-  // internalResetCameraAndEnvironment, applyRenderingModeStyle: Callbacks defined in this component, stable if their own dependencies are stable.
-  // sceneRef: Stable ref.
-  // renderingMode: To apply initial rendering mode after model load.
   }, [
     modelUrl,
     modelFileExtension,
     onModelLoaded,
     onModelHierarchyReady,
     internalResetCameraAndEnvironment,
-    applyRenderingModeStyle,
-    sceneRef, // Though sceneRef.current might change, the ref object itself is stable
-    renderingMode // To apply the correct mode to a newly loaded model
+    sceneRef 
   ]);
 
   useEffect(() => {
+    // This effect now applies rendering mode style when mode changes OR when a new model is confirmed loaded.
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
     }
   }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle]);
+
 
   useEffect(() => {
     if (sceneRef.current) {
@@ -430,3 +420,4 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
+
