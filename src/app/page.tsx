@@ -22,11 +22,12 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 
 
 type Theme = "light" | "dark" | "system";
 type EffectiveTheme = "light" | "dark";
+export type RenderingMode = 'shaded' | 'non-shaded' | 'wireframe';
 
 export default function Home() {
   const [submittedModelUrl, setSubmittedModelUrl] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export default function Home() {
   const [modelName, setModelName] = useState<string | null>(null);
   const [modelHierarchy, setModelHierarchy] = useState<ModelNode[]>([]);
   const [currentFps, setCurrentFps] = useState<number>(0);
+  const [renderingMode, setRenderingMode] = useState<RenderingMode>('shaded');
 
   const [nearClip, setNearClip] = useState<number>(0.1);
   const [farClip, setFarClip] = useState<number>(2000);
@@ -56,8 +58,9 @@ export default function Home() {
     if (storedTheme) {
         currentTheme = storedTheme;
     }
-    setTheme(currentTheme);
+    setTheme(currentTheme); // Set initial theme state
 
+    // Apply initial theme based on stored/system preference
     if (currentTheme === 'dark' || (currentTheme === 'system' && initialSystemIsDark)) {
       document.documentElement.classList.add("dark");
       setEffectiveTheme('dark');
@@ -65,9 +68,10 @@ export default function Home() {
       document.documentElement.classList.remove("dark");
       setEffectiveTheme('light');
     }
-  }, []);
+  }, []); // Run only once on mount
 
   useEffect(() => {
+    // This effect handles theme changes and updates the DOM + localStorage
     const applyThemeSettings = () => {
       if (theme === "light") {
         document.documentElement.classList.remove("dark");
@@ -78,7 +82,7 @@ export default function Home() {
         localStorage.setItem("theme", "dark");
         setEffectiveTheme('dark');
       } else { // system
-        localStorage.removeItem("theme");
+        localStorage.removeItem("theme"); // Clear stored preference for system
         const systemIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         if (systemIsDark) {
           document.documentElement.classList.add("dark");
@@ -90,24 +94,26 @@ export default function Home() {
       }
     };
 
-    applyThemeSettings(); // Apply on initial theme set or change
+    applyThemeSettings();
 
+    // If theme is 'system', listen for OS theme changes
     if (theme === 'system') {
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       const handleChange = () => {
-        applyThemeSettings(); // Re-apply if system preference changes
+        // Re-apply settings when system theme changes
+        applyThemeSettings();
       };
       mediaQuery.addEventListener("change", handleChange);
       return () => mediaQuery.removeEventListener("change", handleChange);
     }
-  }, [theme]);
+  }, [theme]); // Re-run when theme state changes
 
 
   const handleFileSelected = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFileName(file.name);
-      setModelName(file.name);
+      setModelName(file.name); // Also set modelName, can be refined later if URL loading is re-added
 
       const nameParts = file.name.split('.');
       const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
@@ -115,8 +121,8 @@ export default function Home() {
 
       setError(null);
       setIsLoading(true);
-      setSubmittedModelUrl(null);
-      setModelHierarchy([]);
+      setSubmittedModelUrl(null); // Clear previous model URL
+      setModelHierarchy([]); // Clear previous hierarchy
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -135,6 +141,7 @@ export default function Home() {
       };
       reader.readAsDataURL(file);
     } else {
+      // Reset if no file is selected (e.g., user cancels file dialog)
       setSelectedFileName(null);
       setSubmittedModelUrl(null);
       setModelFileExtension(null);
@@ -148,9 +155,11 @@ export default function Home() {
     if (!success) {
       setError(errorMessage || "Failed to load model.");
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (e.g., .glb, .gltf, .obj).", variant: "destructive" });
-      setModelHierarchy([]);
+      setModelHierarchy([]); // Clear hierarchy on error
     } else {
-      setError(null);
+      setError(null); // Clear any previous error
+      // Toast for successful load is optional, can be removed if too noisy
+      // toast({ title: "Success", description: "Model loaded successfully." });
     }
   }, [toast]);
 
@@ -340,6 +349,7 @@ export default function Home() {
                   onCameraReady={handleCameraReady}
                   onFpsUpdate={handleFpsUpdate}
                   onModelHierarchyReady={handleModelHierarchyReady}
+                  renderingMode={renderingMode}
                   nearClip={nearClip}
                   farClip={farClip}
                   effectiveTheme={effectiveTheme}
@@ -392,9 +402,37 @@ export default function Home() {
             )}
 
             {submittedModelUrl && !isLoading && !error && (
+              <>
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card/80 backdrop-blur-md rounded-md border border-border shadow-md text-xs text-muted-foreground">
                   FPS: {currentFps}
                 </div>
+                <div className="absolute bottom-4 right-4 z-10 flex gap-1 p-1 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md">
+                  <Button
+                    variant={renderingMode === 'shaded' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRenderingMode('shaded')}
+                    className="text-xs h-7 px-2"
+                  >
+                    Shaded
+                  </Button>
+                  <Button
+                    variant={renderingMode === 'non-shaded' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRenderingMode('non-shaded')}
+                    className="text-xs h-7 px-2"
+                  >
+                    Non-Shaded
+                  </Button>
+                  <Button
+                    variant={renderingMode === 'wireframe' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setRenderingMode('wireframe')}
+                    className="text-xs h-7 px-2"
+                  >
+                    Wireframe
+                  </Button>
+                </div>
+              </>
             )}
         </main>
       </div>
