@@ -45,7 +45,6 @@ interface BabylonViewerProps {
   farClip: number;
   effectiveTheme: EffectiveTheme;
   isGridVisible: boolean;
-  // Animation props
   requestPlayAnimation?: boolean;
   requestAnimationSeek?: number; // Percentage 0-100
   onAnimationsAvailable?: (available: boolean, duration: number) => void;
@@ -80,14 +79,14 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
   const animationGroupsRef = useRef<Nullable<AnimationGroup[]>>(null);
   const totalDurationSecondsRef = useRef<number>(0);
-  const frameRateRef = useRef<number>(60); // Default, will try to update from model
+  const frameRateRef = useRef<number>(60);
   const isPlayingInternalRef = useRef<boolean>(false);
   const animationProgressObserverRef = useRef<any>(null);
 
 
   const internalResetCameraAndEnvironment = useCallback(() => {
     const scene = sceneRef.current;
-    const camera = cameraRef.current; // Use the stored cameraRef
+    const camera = cameraRef.current;
     if (!scene || !camera) return;
 
     camera.setTarget(Vector3.Zero());
@@ -112,6 +111,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         skyboxSize: 1000, 
         createGround: false 
     });
+    scene.environmentIntensity = 0.7; // Adjust intensity
   }, []);
 
 
@@ -119,28 +119,35 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if (!container || !sceneRef.current) return;
 
     if (currentModelFileExtension === '.obj') {
-      return; // Skip OBJ files for rendering mode changes
+      return; 
     }
 
     const processSingleMaterial = (mat: Material) => {
+      mat.alpha = 1.0; 
+
+      if (newRenderingMode === 'shaded') {
         mat.wireframe = false;
-        mat.alpha = 1.0;
-
         if (mat instanceof PBRMaterial) {
-            mat.unlit = false;
+          mat.unlit = false;
         } else if (mat instanceof StandardMaterial) {
-            mat.disableLighting = false;
+          mat.disableLighting = false;
         }
-
-        if (newRenderingMode === 'non-shaded') {
-            if (mat instanceof PBRMaterial) mat.unlit = true;
-            else if (mat instanceof StandardMaterial) mat.disableLighting = true;
-        } else if (newRenderingMode === 'wireframe') {
-            mat.wireframe = true;
-            if (mat instanceof PBRMaterial) mat.unlit = true;
-            else if (mat instanceof StandardMaterial) mat.disableLighting = true;
+      } else if (newRenderingMode === 'non-shaded') {
+        mat.wireframe = false;
+        if (mat instanceof PBRMaterial) {
+          mat.unlit = true;
+        } else if (mat instanceof StandardMaterial) {
+          mat.disableLighting = true;
         }
-        mat.markAsDirty(Material.AllDirtyFlag);
+      } else if (newRenderingMode === 'wireframe') {
+        mat.wireframe = true;
+        if (mat instanceof PBRMaterial) {
+          mat.unlit = true;
+        } else if (mat instanceof StandardMaterial) {
+          mat.disableLighting = true;
+        }
+      }
+      mat.markAsDirty(Material.AllDirtyFlag);
     };
     
     container.meshes.forEach((mesh: AbstractMesh) => {
@@ -170,17 +177,18 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     camera.wheelPrecision = 50;
     camera.lowerRadiusLimit = 0.1;
     camera.upperRadiusLimit = 20000; 
-    cameraRef.current = camera; // Store camera instance
+    cameraRef.current = camera; 
     onCameraReady(camera);
+    
+    new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
+    new HemisphericLight("light2", new Vector3(-1, -1, -0.5), scene);
     
     scene.createDefaultEnvironment({
         createSkybox: false, 
         skyboxSize: 1000,
         createGround: false,
     });
-
-    new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
-    new HemisphericLight("light2", new Vector3(-1, -1, -0.5), scene);
+    scene.environmentIntensity = 0.7; // Adjust intensity
 
     const ground = MeshBuilder.CreateGround("grid", {width: 100, height: 100, subdivisions: 10}, scene);
     const gridMaterial = new GridMaterial("gridMaterial", scene);
@@ -204,24 +212,20 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       }
     });
     
-    // Animation progress observer
     if (animationProgressObserverRef.current) {
       scene.onBeforeRenderObservable.remove(animationProgressObserverRef.current);
     }
     animationProgressObserverRef.current = scene.onBeforeRenderObservable.add(() => {
         if (isPlayingInternalRef.current && animationGroupsRef.current && animationGroupsRef.current.length > 0 && totalDurationSecondsRef.current > 0) {
-            const group = animationGroupsRef.current[0]; // Assume first group dictates time
+            const group = animationGroupsRef.current[0]; 
             if (group.isPlaying) {
                  let currentFrame = 0;
-                 // Try to get current frame from an active animatable. This is a common way.
-                 const firstAnimatable = group.animatables.find(a => a.animationLoop !== null); // Find one that is "active"
+                 const firstAnimatable = group.animatables.find(a => a.animationLoop !== null); 
                  if (firstAnimatable) {
                     currentFrame = firstAnimatable.masterFrame;
                  } else if (group.animatables.length > 0 && group.animatables[0]) {
-                    // Fallback if no clearly "active" one, just use the first. Might not be perfect.
                     currentFrame = group.animatables[0].masterFrame;
                  }
-
 
                 const currentTime = currentFrame / (frameRateRef.current || 60);
                 let progress = (currentTime / totalDurationSecondsRef.current) * 100;
@@ -231,10 +235,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     onAnimationProgressUpdate(progress, currentTime, totalDurationSecondsRef.current);
                 }
 
-                // Check if animation ended (if not looping)
-                if (!group.loopAnimation && currentFrame >= group.to && group.isPlaying) { // Check group.isPlaying again
+                if (!group.loopAnimation && currentFrame >= group.to && group.isPlaying) { 
                     isPlayingInternalRef.current = false;
-                    group.stop(); // Ensure it's marked as stopped
+                    group.stop(); 
                     if (onAnimationStateChange) {
                         onAnimationStateChange(false);
                     }
@@ -242,7 +245,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             }
         }
     });
-
 
     const resizeObserver = new ResizeObserver(() => {
       if (engineRef.current) {
@@ -296,7 +298,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         sceneRef.current.clearColor = new Color4(38/255, 38/255, 38/255, 1); 
       }
     }
-  }, [effectiveTheme, sceneRef]);
+  }, [effectiveTheme]);
 
   useEffect(() => {
     const activeCamera = sceneRef.current?.activeCamera;
@@ -304,7 +306,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       activeCamera.minZ = nearClip;
       activeCamera.maxZ = farClip;
     }
-  }, [nearClip, farClip, sceneRef]);
+  }, [nearClip, farClip]);
 
 
   useEffect(() => {
@@ -319,7 +321,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     animationGroupsRef.current = null;
     totalDurationSecondsRef.current = 0;
     isPlayingInternalRef.current = false;
-
 
     if (loadedAssetContainerRef.current) {
       loadedAssetContainerRef.current.removeAllFromScene(); 
@@ -338,7 +339,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     const isDataUrl = modelUrl.startsWith('data:');
     const rootUrl = isDataUrl ? "" : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
     const pluginExtension = isDataUrl ? modelFileExtension || undefined : undefined;
-
 
     SceneLoader.LoadAssetContainerAsync(rootUrl, modelUrl, scene, undefined, pluginExtension)
       .then(container => {
@@ -395,8 +395,10 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             skyboxSize: Math.max(modelSize * 2, 1000), 
             createGround: false, 
         });
+        scene.environmentIntensity = 0.7; // Adjust intensity
         
         applyRenderingModeStyle(renderingMode, container, modelFileExtension); 
+        
         onModelLoaded(true);
         setIsCurrentModelActuallyLoaded(true); 
 
@@ -416,7 +418,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                       !child.name.startsWith("hdrSkyBox") && 
                       !(child instanceof HemisphericLight) && 
                       !(child instanceof ArcRotateCamera) &&
-                      !child.name.includes("__root__") // Less aggressive filter
+                      !(child.name.startsWith("__") && child.name.endsWith("__") && child.getChildren && child.getChildren().length === 0) 
                   )
                   .map(buildNodeHierarchy);
           
@@ -436,25 +438,25 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                          !node.name.startsWith("light2") && 
                          !node.name.startsWith("hdrSkyBox") &&
                          !(node instanceof HemisphericLight) && 
-                         !(node instanceof ArcRotateCamera);
+                         !(node instanceof ArcRotateCamera) &&
+                         (!(node.name.startsWith("__") && node.name.endsWith("__")) || (node.getChildren && node.getChildren().length > 0) || node instanceof Mesh);
               })
               .map(buildNodeHierarchy)
-              .filter(node => !(node.name.startsWith("__") && node.name.endsWith("__") && node.children.length === 0)); 
+              .filter(node => !(node.name.startsWith("__") && node.name.endsWith("__") && node.children.length === 0 && node.type !== "Mesh"));
           
             onModelHierarchyReady(hierarchyRoots);
           }
 
-        // Animation setup
         if (container.animationGroups && container.animationGroups.length > 0) {
             animationGroupsRef.current = container.animationGroups;
             let maxDuration = 0;
-            let detectedFrameRate = 60; // Default
+            let detectedFrameRate = 60; 
             animationGroupsRef.current.forEach(group => {
                 group.stop();
-                group.reset(); // Reset to initial frame
-                group.goToFrame(0); // Ensure it's at the start
+                group.reset(); 
+                group.goToFrame(0); 
 
-                const groupToFrame = group.to; // 'to' is highest frame index in the group
+                const groupToFrame = group.to; 
                 if (group.targetedAnimations.length > 0 && group.targetedAnimations[0].animation) {
                     const animFrameRate = group.targetedAnimations[0].animation.frameRate;
                     if (animFrameRate > 0) detectedFrameRate = animFrameRate;
@@ -505,7 +507,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
   }, [
     modelUrl, modelFileExtension, onModelLoaded, onModelHierarchyReady, onAnimationsAvailable,
-    internalResetCameraAndEnvironment, renderingMode, sceneRef, applyRenderingModeStyle 
+    internalResetCameraAndEnvironment, renderingMode, applyRenderingModeStyle
   ]);
 
   useEffect(() => {
@@ -522,14 +524,13 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         gridMesh.setEnabled(isGridVisible);
       }
     }
-  }, [isGridVisible, sceneRef]);
+  }, [isGridVisible]);
 
-  // Effect for playing/pausing animation
   useEffect(() => {
     if (animationGroupsRef.current && typeof requestPlayAnimation === 'boolean') {
       animationGroupsRef.current.forEach(group => {
         if (requestPlayAnimation) {
-          if (!group.isPlaying) group.play(true); // Loop animation for now
+          if (!group.isPlaying) group.play(true); 
         } else {
           if (group.isPlaying) group.pause();
         }
@@ -539,25 +540,22 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     }
   }, [requestPlayAnimation, onAnimationStateChange]);
 
-  // Effect for seeking animation
   useEffect(() => {
     if (animationGroupsRef.current && typeof requestAnimationSeek === 'number' && totalDurationSecondsRef.current > 0) {
       const targetFrame = (requestAnimationSeek / 100) * (totalDurationSecondsRef.current * (frameRateRef.current || 60));
       animationGroupsRef.current.forEach(group => {
-        // Ensure animation is stopped before seeking if it was playing to avoid conflicts, then play if needed
         const wasPlaying = group.isPlaying;
-        if (wasPlaying) group.pause(); // Pause, then seek, then potentially resume
+        if (wasPlaying) group.pause(); 
 
         group.goToFrame(targetFrame);
         
-        if (wasPlaying && requestPlayAnimation) { // If it should be playing, resume
+        if (wasPlaying && (typeof requestPlayAnimation === 'undefined' || requestPlayAnimation === true)) { 
            group.play(true);
-        } else if (!requestPlayAnimation && group.isPlaying) { // If it should be paused but somehow goToFrame started it
+        } else if ((typeof requestPlayAnimation !== 'undefined' && !requestPlayAnimation) && group.isPlaying) { 
            group.pause();
         }
       });
       
-      // Immediately update progress display after seek
       if (onAnimationProgressUpdate) {
         const currentTime = (requestAnimationSeek / 100) * totalDurationSecondsRef.current;
         onAnimationProgressUpdate(requestAnimationSeek, currentTime, totalDurationSecondsRef.current);
@@ -568,3 +566,4 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
+
