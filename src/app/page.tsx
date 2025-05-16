@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop, Grid } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop, Grid, Play, Pause, TimerIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
@@ -50,6 +50,17 @@ export default function Home() {
   const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>('light');
   const [isGridVisible, setIsGridVisible] = useState<boolean>(true);
 
+  // Animation state
+  const [hasAnimations, setHasAnimations] = useState<boolean>(false);
+  const [isPlayingAnimation, setIsPlayingAnimation] = useState<boolean>(false);
+  const [animationProgress, setAnimationProgress] = useState<number>(0); // 0-100
+  const [animationDurationSeconds, setAnimationDurationSeconds] = useState<number>(0);
+  const [animationCurrentTimeSeconds, setAnimationCurrentTimeSeconds] = useState<number>(0);
+  
+  const [requestPlayAnimation, setRequestPlayAnimation] = useState<boolean | undefined>(undefined);
+  const [requestAnimationSeek, setRequestAnimationSeek] = useState<number | undefined>(undefined);
+
+
   useEffect(() => {
     const storedTheme = localStorage.getItem("theme") as Theme | null;
     const initialSystemIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -58,9 +69,8 @@ export default function Home() {
     if (storedTheme) {
         currentTheme = storedTheme;
     }
-    setTheme(currentTheme); // Set initial theme state
+    setTheme(currentTheme); 
 
-    // Apply initial theme based on stored/system preference
     if (currentTheme === 'dark' || (currentTheme === 'system' && initialSystemIsDark)) {
       document.documentElement.classList.add("dark");
       setEffectiveTheme('dark');
@@ -68,10 +78,9 @@ export default function Home() {
       document.documentElement.classList.remove("dark");
       setEffectiveTheme('light');
     }
-  }, []); // Run only once on mount
+  }, []); 
 
   useEffect(() => {
-    // This effect handles theme changes and updates the DOM + localStorage
     const applyThemeSettings = () => {
       if (theme === "light") {
         document.documentElement.classList.remove("dark");
@@ -81,8 +90,8 @@ export default function Home() {
         document.documentElement.classList.add("dark");
         localStorage.setItem("theme", "dark");
         setEffectiveTheme('dark');
-      } else { // system
-        localStorage.removeItem("theme"); // Clear stored preference for system
+      } else { 
+        localStorage.removeItem("theme"); 
         const systemIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         if (systemIsDark) {
           document.documentElement.classList.add("dark");
@@ -96,24 +105,22 @@ export default function Home() {
 
     applyThemeSettings();
 
-    // If theme is 'system', listen for OS theme changes
     if (theme === 'system') {
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       const handleChange = () => {
-        // Re-apply settings when system theme changes
         applyThemeSettings();
       };
       mediaQuery.addEventListener("change", handleChange);
       return () => mediaQuery.removeEventListener("change", handleChange);
     }
-  }, [theme]); // Re-run when theme state changes
+  }, [theme]); 
 
 
   const handleFileSelected = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFileName(file.name);
-      setModelName(file.name); // Also set modelName, can be refined later if URL loading is re-added
+      setModelName(file.name); 
 
       const nameParts = file.name.split('.');
       const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
@@ -121,8 +128,17 @@ export default function Home() {
 
       setError(null);
       setIsLoading(true);
-      setSubmittedModelUrl(null); // Clear previous model URL
-      setModelHierarchy([]); // Clear previous hierarchy
+      setSubmittedModelUrl(null); 
+      setModelHierarchy([]); 
+      // Reset animation states
+      setHasAnimations(false);
+      setIsPlayingAnimation(false);
+      setAnimationProgress(0);
+      setAnimationDurationSeconds(0);
+      setAnimationCurrentTimeSeconds(0);
+      setRequestPlayAnimation(undefined);
+      setRequestAnimationSeek(undefined);
+
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -141,12 +157,12 @@ export default function Home() {
       };
       reader.readAsDataURL(file);
     } else {
-      // Reset if no file is selected (e.g., user cancels file dialog)
       setSelectedFileName(null);
       setSubmittedModelUrl(null);
       setModelFileExtension(null);
       setModelName(null);
       setModelHierarchy([]);
+      setHasAnimations(false);
     }
   }, [toast]);
 
@@ -155,11 +171,10 @@ export default function Home() {
     if (!success) {
       setError(errorMessage || "Failed to load model.");
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (e.g., .glb, .gltf, .obj).", variant: "destructive" });
-      setModelHierarchy([]); // Clear hierarchy on error
+      setModelHierarchy([]);
+      setHasAnimations(false);
     } else {
-      setError(null); // Clear any previous error
-      // Toast for successful load is optional, can be removed if too noisy
-      // toast({ title: "Success", description: "Model loaded successfully." });
+      setError(null); 
     }
   }, [toast]);
 
@@ -179,6 +194,52 @@ export default function Home() {
   const triggerFileDialog = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
+
+  const handleAnimationsAvailable = useCallback((available: boolean, duration: number) => {
+    setHasAnimations(available);
+    setAnimationDurationSeconds(duration);
+    setAnimationProgress(0);
+    setAnimationCurrentTimeSeconds(0);
+    setIsPlayingAnimation(false); // Ensure animation is paused on new model load
+    setRequestPlayAnimation(false); // Explicitly request pause
+    setRequestAnimationSeek(0); // Explicitly seek to start
+  }, []);
+
+  const handleAnimationStateChange = useCallback((isPlaying: boolean) => {
+    setIsPlayingAnimation(isPlaying);
+    // If animation stops by itself (e.g. ends), update requestPlay to reflect this
+    if (!isPlaying) {
+        setRequestPlayAnimation(false);
+    }
+  }, []);
+
+  const handleAnimationProgressUpdate = useCallback((progress: number, currentTime: number) => {
+    setAnimationProgress(progress);
+    setAnimationCurrentTimeSeconds(currentTime);
+  }, []);
+
+  const handlePlayPauseToggle = useCallback(() => {
+    const newPlayState = !isPlayingAnimation;
+    setIsPlayingAnimation(newPlayState);
+    setRequestPlayAnimation(newPlayState);
+  }, [isPlayingAnimation]);
+
+  const handleAnimationSliderChange = useCallback((value: number[]) => {
+    const newProgress = value[0];
+    setAnimationProgress(newProgress);
+    setRequestAnimationSeek(newProgress);
+    // If user scrubs, ensure the play state is re-asserted based on current button state
+    // This tells BabylonViewer to update to the new frame, and then either continue playing or stay paused.
+    setRequestPlayAnimation(isPlayingAnimation); 
+  }, [isPlayingAnimation]);
+
+  const formatTime = (timeInSeconds: number): string => {
+    const totalSeconds = Math.floor(timeInSeconds);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -326,6 +387,9 @@ export default function Home() {
                     <div
                         className="flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer backdrop-blur-md"
                         onClick={triggerFileDialog}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") triggerFileDialog();}}
                     >
                         <div className="flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4">
                             <UploadCloud className="h-10 w-10 text-primary" />
@@ -354,6 +418,11 @@ export default function Home() {
                   farClip={farClip}
                   effectiveTheme={effectiveTheme}
                   isGridVisible={isGridVisible}
+                  requestPlayAnimation={requestPlayAnimation}
+                  requestAnimationSeek={requestAnimationSeek}
+                  onAnimationsAvailable={handleAnimationsAvailable}
+                  onAnimationStateChange={handleAnimationStateChange}
+                  onAnimationProgressUpdate={handleAnimationProgressUpdate}
               />
             )}
             
@@ -406,7 +475,7 @@ export default function Home() {
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 px-3 py-1.5 bg-card/80 backdrop-blur-md rounded-md border border-border shadow-md text-xs text-muted-foreground">
                   FPS: {currentFps}
                 </div>
-                <div className="absolute bottom-4 right-4 z-10 flex gap-1 p-1 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md">
+                <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-1 p-1 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md">
                   <Button
                     variant={renderingMode === 'shaded' ? 'default' : 'outline'}
                     size="sm"
@@ -432,6 +501,33 @@ export default function Home() {
                     Wireframe
                   </Button>
                 </div>
+                {hasAnimations && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2 p-2 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md w-80">
+                    <div className="flex items-center gap-2 w-full">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handlePlayPauseToggle}
+                        className="h-7 w-7 text-foreground"
+                      >
+                        {isPlayingAnimation ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                      </Button>
+                      <Slider
+                        value={[animationProgress]}
+                        onValueChange={handleAnimationSliderChange}
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        className="flex-grow"
+                        aria-label="Animation progress"
+                      />
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      <TimerIcon className="inline h-3 w-3 mr-1" />
+                      {formatTime(animationCurrentTimeSeconds)} / {formatTime(animationDurationSeconds)}
+                    </div>
+                  </div>
+                )}
               </>
             )}
         </main>
@@ -446,3 +542,4 @@ export default function Home() {
     </div>
   );
 }
+
