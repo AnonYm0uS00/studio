@@ -108,33 +108,39 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if (!container || !sceneRef.current) return;
 
     if (currentModelFileExtension === '.obj') {
+      // For OBJ, rendering mode changes are currently disabled as per user request
       return;
     }
 
     const processSingleMaterial = (mat: Material) => {
-      mat.wireframe = false; // Reset wireframe
-      mat.alpha = 1.0; // Reset alpha
+      mat.wireframe = false;
+      mat.alpha = 1.0;
 
       if (mat instanceof PBRMaterial) {
         mat.unlit = false;
-        if (newRenderingMode === 'non-shaded') {
-          mat.unlit = true;
-        } else if (newRenderingMode === 'wireframe') {
-          mat.wireframe = true;
-          mat.unlit = true; 
-        }
       } else if (mat instanceof StandardMaterial) {
         mat.disableLighting = false;
-        if (newRenderingMode === 'non-shaded') {
-          mat.disableLighting = true;
-        } else if (newRenderingMode === 'wireframe') {
+      }
+
+      switch (newRenderingMode) {
+        case 'shaded':
+          // Defaults are already shaded
+          break;
+        case 'non-shaded':
+          if (mat instanceof PBRMaterial) {
+            mat.unlit = true;
+          } else if (mat instanceof StandardMaterial) {
+            mat.disableLighting = true;
+          }
+          break;
+        case 'wireframe':
           mat.wireframe = true;
-          mat.disableLighting = true;
-        }
-      } else { // For other material types
-        if (newRenderingMode === 'wireframe') {
-          mat.wireframe = true;
-        }
+          if (mat instanceof PBRMaterial) {
+            mat.unlit = true; // Render wireframe on an unlit base
+          } else if (mat instanceof StandardMaterial) {
+            mat.disableLighting = true; // Render wireframe on an unlit base
+          }
+          break;
       }
     };
     
@@ -342,8 +348,19 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         loadedAssetContainerRef.current = container;
         container.addAllToScene();
 
+        // Ensure all materials (including sub-materials) are double-sided
         container.materials.forEach(mat => {
-            mat.backFaceCulling = false;
+            const processMaterialForCulling = (materialInstance: Material) => {
+                materialInstance.backFaceCulling = false;
+            };
+
+            if (mat instanceof MultiMaterial) {
+                mat.subMaterials.forEach(subMat => {
+                    if (subMat) processMaterialForCulling(subMat);
+                });
+            } else {
+                processMaterialForCulling(mat);
+            }
         });
 
         const allModelMeshes = container.meshes.filter(m => m.name !== "grid" && !(m instanceof HemisphericLight) && !(m instanceof ArcRotateCamera) && !m.name.startsWith("__") && !m.name.endsWith("__"));
@@ -395,11 +412,14 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           
               const children = (babylonNode.getChildren ? babylonNode.getChildren() : [])
                   .filter(child => {
+                      // Filter out direct scene helpers we manage (camera, lights, grid)
                       const sceneNodeNames = ["camera", "light1", "light2", "grid"];
-                      const isSceneHelper = sceneNodeNames.some(name => child.name === name || child.name.startsWith(name + "_"));
-                      // Keep internal loader nodes if they are Meshes or have children, filter out empty TransformNodes starting with __
-                      const isInternalLoaderNode = child.name.startsWith("__") && child.name.endsWith("__") && !(child instanceof Mesh) && (!child.getChildren || child.getChildren().length === 0);
-                      return !isSceneHelper && !isInternalLoaderNode;
+                      if (sceneNodeNames.includes(child.name)) return false;
+                      // Keep internal loader nodes like __root__ or those starting with __ if they are Meshes or have children
+                      if (child.name.startsWith("__") && child.name.endsWith("__")) {
+                          return child instanceof Mesh || (child.getChildren && child.getChildren().length > 0);
+                      }
+                      return true;
                   })
                   .map(buildNodeHierarchy);
           
@@ -414,9 +434,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             const hierarchyRoots: ModelNode[] = container.rootNodes
               .filter(node => {
                  const sceneNodeNames = ["camera", "light1", "light2", "grid"];
-                 const isSceneHelper = sceneNodeNames.some(name => node.name === name || node.name.startsWith(name + "_"));
-                 const isActualModelRoot = (node.name.startsWith("__") && node.name.endsWith("__")) || (node.getChildren && node.getChildren().length > 0 && !isSceneHelper);
-                 return isActualModelRoot || (!isSceneHelper && !(node instanceof HemisphericLight) && !(node instanceof ArcRotateCamera));
+                 if (sceneNodeNames.includes(node.name)) return false;
+                 // Accept __root__ nodes or any node that isn't one of our direct scene helpers.
+                 return node.name.startsWith("__") || !((node instanceof HemisphericLight) || (node instanceof ArcRotateCamera));
               })
               .map(buildNodeHierarchy);
           
@@ -509,14 +529,16 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     onModelHierarchyReady,
     onMaterialsReady, 
     onAnimationsAvailable,
-    internalResetCameraAndEnvironment,
-    sceneRef, cameraRef, // Added sceneRef and cameraRef for stability as they are used
+    internalResetCameraAndEnvironment, // internalResetCameraAndEnvironment is stable due to useCallback
+    sceneRef, cameraRef, // sceneRef and cameraRef are stable refs
+    // renderingMode and applyRenderingModeStyle are intentionally omitted here to prevent re-loading on mode change
   ]);
 
   useEffect(() => {
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current, modelFileExtension);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderingMode, isCurrentModelActuallyLoaded, modelFileExtension, applyRenderingModeStyle]);
 
 
