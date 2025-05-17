@@ -103,14 +103,15 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         currentEnv.dispose();
         scene.environmentTexture = null;
     }
+    // Ensure any old skybox mesh is removed
     const skyboxMesh = scene.getMeshByName("hdrSkyBox"); 
     if (skyboxMesh) {
         skyboxMesh.dispose();
     }
     
     scene.createDefaultEnvironment({ 
-        createSkybox: true, 
-        createGround: false, 
+        createSkybox: false, // Explicitly false
+        createGround: false, // Explicitly false
         skyboxSize: 150, 
         enableGroundShadow: false, 
     });
@@ -137,7 +138,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     const processSingleMaterial = (mat: Material) => {
       mat.wireframe = false;
-      // mat.alpha = 1.0; // Ensure this is not uncommented unless specifically needed for wireframe visibility
+      mat.alpha = 1.0; // Default to opaque
 
       if (mat instanceof PBRMaterial) {
         mat.unlit = false; 
@@ -165,6 +166,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           }
           break;
       }
+      // mat.markAsDirty(Material.AllDirtyFlag); // Removed for performance, re-add if OBJ issues persist and this helped
     };
     
     container.meshes.forEach((mesh: AbstractMesh) => {
@@ -206,8 +208,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     light2.intensity = 0.7;
 
     scene.createDefaultEnvironment({
-        createSkybox: true, 
-        createGround: false, 
+        createSkybox: false, // Explicitly false
+        createGround: false, // Explicitly false
         skyboxSize: 150, 
         enableGroundShadow: false, 
     });
@@ -260,6 +262,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
         const envTex = sceneRef.current.environmentTexture;
         if (envTex) envTex.dispose();
+        // Ensure any old skybox mesh is removed
         const skyboxMesh = sceneRef.current.getMeshByName("hdrSkyBox"); 
         if(skyboxMesh) skyboxMesh.dispose();
         
@@ -337,7 +340,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       activeCamera.minZ = nearClip;
       activeCamera.maxZ = farClip;
     }
-  }, [nearClip, farClip, sceneRef]);
+  }, [nearClip, farClip]);
 
   // Effect for setting scene clearColor based on theme
   useEffect(() => {
@@ -393,6 +396,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             oldEnv.dispose();
             scene.environmentTexture = null;
         }
+        // Ensure any old skybox mesh is removed
         const oldSkybox = scene.getMeshByName("hdrSkyBox"); 
         if (oldSkybox) {
             oldSkybox.dispose();
@@ -421,7 +425,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                 if (mat instanceof PBRMaterial) {
                     const pbrMat = mat as PBRMaterial;
                     if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
-                        // Only override to ALPHABLEND if it's not ALPHATEST (MASK mode)
                         if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) {
                             pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
                         }
@@ -456,8 +459,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                         grid.position.y = modelBoundingMin.y - 0.01; 
                     }
                     scene.createDefaultEnvironment({
-                        createSkybox: true, 
-                        createGround: false, 
+                        createSkybox: false, // Explicitly false
+                        createGround: false, // Explicitly false
                         skyboxSize: Math.max(150, (modelBoundingMax.subtract(modelBoundingMin)).length() * 2),
                         enableGroundShadow: false,
                     });
@@ -475,6 +478,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             if(grid) grid.position.y = 0;
         }
 
+        // Ensure clearColor is correctly set based on theme after model load and environment setup
         if (effectiveTheme === 'light') {
           scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
         } else { 
@@ -603,8 +607,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     onAnimationsAvailable,
     internalResetCameraAndEnvironment,
     applyRenderingModeStyle, 
-    renderingMode, // Keep renderingMode to re-apply initial style if it changes before model load completes
-    effectiveTheme 
+    //renderingMode, // Removed to prevent re-load on renderingMode change
+    effectiveTheme // Keep effectiveTheme to re-apply clearColor after model load
   ]);
 
   useEffect(() => {
