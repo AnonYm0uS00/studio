@@ -22,7 +22,6 @@ import {
   TransformNode,
   Mesh,
   AnimationGroup,
-  // Animation, // No longer directly used
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF';
@@ -45,6 +44,7 @@ interface BabylonViewerProps {
   farClip: number;
   effectiveTheme: EffectiveTheme;
   isGridVisible: boolean;
+  isAutoRotating: boolean;
   requestPlayAnimation?: boolean;
   requestAnimationSeek?: number; // Percentage 0-100
   onAnimationsAvailable?: (available: boolean, duration: number) => void;
@@ -64,6 +64,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   farClip,
   effectiveTheme,
   isGridVisible,
+  isAutoRotating,
   requestPlayAnimation,
   requestAnimationSeek,
   onAnimationsAvailable,
@@ -98,24 +99,16 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if(groundMesh) {
       groundMesh.position.y = 0; 
     }
-    // scene.environmentIntensity = 0.7; // No longer setting environment here
   }, []);
 
 
   const applyRenderingModeStyle = useCallback((newRenderingMode: RenderingMode, container: Nullable<AssetContainer>, currentModelFileExtension: string | null) => {
     if (!container || !sceneRef.current) return;
     if (currentModelFileExtension === '.obj' && (newRenderingMode === 'non-shaded' || newRenderingMode === 'wireframe')) {
-        // console.log("Skipping rendering mode change for OBJ (non-shaded/wireframe)");
         return; 
     }
 
     const processSingleMaterial = (mat: Material) => {
-      // Always ensure alpha is 1 unless specifically handled otherwise (e.g. by PBR transparencyMode)
-      // This helps ensure wireframe is visible and model isn't accidentally transparent.
-      if (! (mat instanceof PBRMaterial && mat.transparencyMode !== PBRMaterial.PBR_OPAQUE) ) {
-        mat.alpha = 1.0; 
-      }
-
       if (newRenderingMode === 'shaded') {
         mat.wireframe = false;
         if (mat instanceof PBRMaterial) {
@@ -132,12 +125,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       } else if (newRenderingMode === 'wireframe') {
         mat.wireframe = true;
-        // Also make wireframe unlit for clarity
-        if (mat instanceof PBRMaterial) {
+         if (mat instanceof PBRMaterial) {
           mat.unlit = true;
         } else if (mat instanceof StandardMaterial) {
           mat.disableLighting = true;
         }
+        mat.alpha = 1.0; 
       }
       mat.markAsDirty(Material.AllDirtyFlag);
     };
@@ -201,6 +194,10 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       scene.onBeforeRenderObservable.remove(animationProgressObserverRef.current);
     }
     animationProgressObserverRef.current = scene.onBeforeRenderObservable.add(() => {
+        if (isAutoRotating && cameraRef.current) {
+          cameraRef.current.alpha += 0.005; // Adjust rotation speed as needed
+        }
+
         if (isPlayingInternalRef.current && animationGroupsRef.current && animationGroupsRef.current.length > 0 && totalDurationSecondsRef.current > 0) {
             const group = animationGroupsRef.current[0]; 
             if (group.isPlaying) {
@@ -267,7 +264,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       cameraRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onCameraReady, onFpsUpdate, onAnimationProgressUpdate, onAnimationStateChange]); 
+  }, [onCameraReady, onFpsUpdate, onAnimationProgressUpdate, onAnimationStateChange, isAutoRotating]); 
 
   useEffect(() => {
     if (sceneRef.current && sceneRef.current.activeCamera) {
@@ -324,7 +321,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         loadedAssetContainerRef.current = container;
         container.addAllToScene();
 
-        // Force all materials to be double-sided
         container.materials.forEach(mat => {
             mat.backFaceCulling = false;
         });
@@ -471,19 +467,24 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         internalResetCameraAndEnvironment(); 
       });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    modelUrl, modelFileExtension, onModelLoaded, onModelHierarchyReady, onAnimationsAvailable,
-    internalResetCameraAndEnvironment, // applyRenderingModeStyle is called from other effects
-    // renderingMode, // Handled by its own effect
+    modelUrl, 
+    modelFileExtension, 
+    onModelLoaded, 
+    onModelHierarchyReady, 
+    onAnimationsAvailable,
+    internalResetCameraAndEnvironment,
+    applyRenderingModeStyle,
+    sceneRef,
+    cameraRef,
+    renderingMode, // ensure initial mode is applied
   ]);
 
   useEffect(() => {
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
       applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current, modelFileExtension);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderingMode, isCurrentModelActuallyLoaded, modelFileExtension]); // applyRenderingModeStyle is stable due to useCallback
+  }, [renderingMode, isCurrentModelActuallyLoaded, modelFileExtension, applyRenderingModeStyle]);
 
 
   useEffect(() => {
@@ -535,4 +536,3 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
 };
-

@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop, Grid, Play, Pause, TimerIcon } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop, Grid, Play, Pause, TimerIcon, RotateCw } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode } from '@/components/types';
@@ -49,6 +49,7 @@ export default function Home() {
   const [theme, setTheme] = useState<Theme>("system");
   const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>('light');
   const [isGridVisible, setIsGridVisible] = useState<boolean>(true);
+  const [isAutoRotating, setIsAutoRotating] = useState<boolean>(false);
 
   // Animation state
   const [hasAnimations, setHasAnimations] = useState<boolean>(false);
@@ -418,6 +419,7 @@ export default function Home() {
                   farClip={farClip}
                   effectiveTheme={effectiveTheme}
                   isGridVisible={isGridVisible}
+                  isAutoRotating={isAutoRotating}
                   requestPlayAnimation={requestPlayAnimation}
                   requestAnimationSeek={requestAnimationSeek}
                   onAnimationsAvailable={handleAnimationsAvailable}
@@ -436,6 +438,15 @@ export default function Home() {
                   className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
                 >
                   <Grid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={isAutoRotating ? "secondary" : "outline"}
+                  size="icon"
+                  onClick={() => setIsAutoRotating(!isAutoRotating)}
+                  title={isAutoRotating ? "Stop Auto-Rotation" : "Start Auto-Rotation"}
+                  className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                >
+                  <RotateCw className="h-4 w-4" />
                 </Button>
               </div>
             )}
@@ -547,4 +558,3 @@ export default function Home() {
     </div>
   );
 }
-
