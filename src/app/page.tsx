@@ -51,6 +51,7 @@ export default function Home() {
   const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>('light');
   const [isGridVisible, setIsGridVisible] = useState<boolean>(true);
   const [isAutoRotating, setIsAutoRotating] = useState<boolean>(false);
+  const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
 
   // Animation state
   const [hasAnimations, setHasAnimations] = useState<boolean>(false);
@@ -246,6 +247,10 @@ export default function Home() {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  const toggleExplorerPanel = useCallback(() => {
+    setIsExplorerCollapsed(prev => !prev);
+  }, []);
+
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -326,79 +331,95 @@ export default function Home() {
 
       <div className="flex flex-row flex-grow overflow-hidden">
         {/* Left Panel ("Model Explorer") */}
-        <aside className="w-72 bg-card/70 backdrop-blur-md border-r border-border flex flex-col p-0 shadow-lg">
-          <div className="p-3 border-b border-border flex items-center justify-between h-12">
-            <h2 className="text-sm font-semibold text-primary">Model Explorer</h2>
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-7 w-7">
+        <aside
+          className={`bg-card/70 backdrop-blur-md border-r border-border flex flex-col shadow-lg transition-all duration-300 ease-in-out
+            ${isExplorerCollapsed ? 'w-16' : 'w-72'}`}
+        >
+          <div
+            className={`flex items-center h-12 border-b border-border
+              ${isExplorerCollapsed ? 'justify-center px-2' : 'justify-between px-3'}`}
+          >
+            {!isExplorerCollapsed && (
+              <h2 className="text-sm font-semibold text-primary">Model Explorer</h2>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleExplorerPanel}
+              className="text-muted-foreground hover:text-accent-foreground h-7 w-7"
+            >
               <SlidersHorizontal className="h-4 w-4" />
-              <span className="sr-only">Toggle controls</span>
+              <span className="sr-only">Toggle Model Explorer</span>
             </Button>
           </div>
-          <Tabs defaultValue="info" className="w-full flex flex-col flex-grow p-3">
-            <TabsList className="grid w-full grid-cols-3 h-9">
-              <TabsTrigger value="info" className="text-xs h-7">Info</TabsTrigger>
-              <TabsTrigger value="scene" className="text-xs h-7">Scene</TabsTrigger>
-              <TabsTrigger value="materials" className="text-xs h-7">Materials</TabsTrigger>
-            </TabsList>
-            <TabsContent value="info" className="flex-grow mt-3 overflow-y-auto">
-              {!submittedModelUrl && !isLoading && !error ? (
-                <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                  <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium text-foreground">No model loaded</p>
-                  <p className="text-xs text-muted-foreground">Open a 3D model to view its information.</p>
-                </div>
-              ) : modelName && !error ? (
-                 <div className="p-2 space-y-1">
-                    <p className="text-sm font-semibold text-foreground">Filename: <span className="font-normal text-muted-foreground">{modelName && (modelName.lastIndexOf('.') > 0 ? modelName.substring(0, modelName.lastIndexOf('.')) : modelName)}</span></p>
-                    <p className="text-sm font-semibold text-foreground">File Path: <span className="font-normal text-muted-foreground break-all">{selectedFileName}</span></p>
-                    {modelFileExtension && <p className="text-sm font-semibold text-foreground">File Format: <span className="font-normal text-muted-foreground">{modelFileExtension.toUpperCase()}</span></p>}
-                 </div>
-              ) : null }
-            </TabsContent>
-            <TabsContent value="scene" className="flex-grow mt-3 overflow-y-auto">
-               {modelHierarchy.length > 0 ? (
-                <ul className="space-y-0.5">
-                  {modelHierarchy.map(node => (
-                    <ModelHierarchyView key={node.id} node={node} defaultOpen={true} />
-                  ))}
-                </ul>
-              ) : submittedModelUrl && !isLoading && !error ? (
-                 <p className="text-sm text-muted-foreground italic p-2">Model loaded, but no hierarchy data to display or model is empty.</p>
-              ) : !isLoading && !error && (
-                <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                  <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium text-foreground">No model loaded</p>
-                  <p className="text-xs text-muted-foreground">The scene hierarchy will appear here.</p>
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="materials" className="flex-grow mt-3 overflow-y-auto">
-              {!submittedModelUrl && !isLoading && !error ? (
-                <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                  <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium text-foreground">No model loaded</p>
-                  <p className="text-xs text-muted-foreground">Open a 3D model to view its materials.</p>
-                </div>
-              ) : isLoading ? (
-                <p className="text-sm text-muted-foreground italic p-2">Loading materials...</p>
-              ) : error ? (
-                <p className="text-sm text-destructive italic p-2">Error loading model, materials unavailable.</p>
-              ) : materialDetails.length > 0 ? (
-                <ScrollArea className="h-full">
-                  <div className="space-y-2 p-1">
-                    {materialDetails.map((mat) => (
-                      <div key={mat.id} className="rounded-md border border-border bg-card p-2 text-sm shadow-sm">
-                        <p className="font-semibold text-foreground truncate" title={mat.name}>{mat.name}</p>
-                        <p className="text-xs text-muted-foreground">Type: {mat.type}</p>
-                      </div>
-                    ))}
+          
+          {!isExplorerCollapsed && (
+            <Tabs defaultValue="info" className="w-full flex flex-col flex-grow p-3">
+              <TabsList className="grid w-full grid-cols-3 h-9">
+                <TabsTrigger value="info" className="text-xs h-7">Info</TabsTrigger>
+                <TabsTrigger value="scene" className="text-xs h-7">Scene</TabsTrigger>
+                <TabsTrigger value="materials" className="text-xs h-7">Materials</TabsTrigger>
+              </TabsList>
+              <TabsContent value="info" className="flex-grow mt-3 overflow-y-auto">
+                {!submittedModelUrl && !isLoading && !error ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
+                    <p className="text-sm font-medium text-foreground">No model loaded</p>
+                    <p className="text-xs text-muted-foreground">Open a 3D model to view its information.</p>
                   </div>
-                </ScrollArea>
-              ) : (
-                <p className="text-sm text-muted-foreground italic p-2">No materials found in this model.</p>
-              )}
-            </TabsContent>
-          </Tabs>
+                ) : modelName && !error ? (
+                  <div className="p-2 space-y-1">
+                      <p className="text-sm font-semibold text-foreground">Filename: <span className="font-normal text-muted-foreground">{modelName && (modelName.lastIndexOf('.') > 0 ? modelName.substring(0, modelName.lastIndexOf('.')) : modelName)}</span></p>
+                      <p className="text-sm font-semibold text-foreground">File Path: <span className="font-normal text-muted-foreground break-all">{selectedFileName}</span></p>
+                      {modelFileExtension && <p className="text-sm font-semibold text-foreground">File Format: <span className="font-normal text-muted-foreground">{modelFileExtension.toUpperCase()}</span></p>}
+                  </div>
+                ) : null }
+              </TabsContent>
+              <TabsContent value="scene" className="flex-grow mt-3 overflow-y-auto">
+                {modelHierarchy.length > 0 ? (
+                  <ul className="space-y-0.5">
+                    {modelHierarchy.map(node => (
+                      <ModelHierarchyView key={node.id} node={node} defaultOpen={true} />
+                    ))}
+                  </ul>
+                ) : submittedModelUrl && !isLoading && !error ? (
+                  <p className="text-sm text-muted-foreground italic p-2">Model loaded, but no hierarchy data to display or model is empty.</p>
+                ) : !isLoading && !error && (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
+                    <p className="text-sm font-medium text-foreground">No model loaded</p>
+                    <p className="text-xs text-muted-foreground">The scene hierarchy will appear here.</p>
+                  </div>
+                )}
+              </TabsContent>
+              <TabsContent value="materials" className="flex-grow mt-3 overflow-y-auto">
+                {!submittedModelUrl && !isLoading && !error ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
+                    <p className="text-sm font-medium text-foreground">No model loaded</p>
+                    <p className="text-xs text-muted-foreground">Open a 3D model to view its materials.</p>
+                  </div>
+                ) : isLoading ? (
+                  <p className="text-sm text-muted-foreground italic p-2">Loading materials...</p>
+                ) : error ? (
+                  <p className="text-sm text-destructive italic p-2">Error loading model, materials unavailable.</p>
+                ) : materialDetails.length > 0 ? (
+                  <ScrollArea className="h-full">
+                    <div className="space-y-2 p-1">
+                      {materialDetails.map((mat) => (
+                        <div key={mat.id} className="rounded-md border border-border bg-card p-2 text-sm shadow-sm">
+                          <p className="font-semibold text-foreground truncate" title={mat.name}>{mat.name}</p>
+                          <p className="text-xs text-muted-foreground">Type: {mat.type}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic p-2">No materials found in this model.</p>
+                )}
+              </TabsContent>
+            </Tabs>
+          )}
         </aside>
 
         {/* Right Panel (Viewport / Upload Prompt) */}
