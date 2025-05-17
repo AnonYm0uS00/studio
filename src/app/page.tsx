@@ -8,8 +8,9 @@ import { BabylonViewer } from '@/components/babylon-viewer';
 import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop, Grid, Play, Pause, TimerIcon, RotateCw } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { ModelNode } from '@/components/types';
+import type { ModelNode, MaterialDetail } from '@/components/types';
 import { ModelHierarchyView } from '@/components/model-hierarchy-view';
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +23,6 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
-import { Card } from '@/components/ui/card';
 
 
 type Theme = "light" | "dark" | "system";
@@ -41,6 +41,7 @@ export default function Home() {
 
   const [modelName, setModelName] = useState<string | null>(null);
   const [modelHierarchy, setModelHierarchy] = useState<ModelNode[]>([]);
+  const [materialDetails, setMaterialDetails] = useState<MaterialDetail[]>([]);
   const [currentFps, setCurrentFps] = useState<number>(0);
   const [renderingMode, setRenderingMode] = useState<RenderingMode>('shaded');
 
@@ -131,6 +132,7 @@ export default function Home() {
       setIsLoading(true);
       setSubmittedModelUrl(null); 
       setModelHierarchy([]); 
+      setMaterialDetails([]);
       // Reset animation states
       setHasAnimations(false);
       setIsPlayingAnimation(false);
@@ -163,6 +165,7 @@ export default function Home() {
       setModelFileExtension(null);
       setModelName(null);
       setModelHierarchy([]);
+      setMaterialDetails([]);
       setHasAnimations(false);
     }
   }, [toast]);
@@ -173,6 +176,7 @@ export default function Home() {
       setError(errorMessage || "Failed to load model.");
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (e.g., .glb, .gltf, .obj).", variant: "destructive" });
       setModelHierarchy([]);
+      setMaterialDetails([]);
       setHasAnimations(false);
     } else {
       setError(null); 
@@ -185,6 +189,10 @@ export default function Home() {
 
   const handleModelHierarchyReady = useCallback((hierarchy: ModelNode[]) => {
     setModelHierarchy(hierarchy);
+  }, []);
+
+  const handleMaterialsReady = useCallback((materials: MaterialDetail[]) => {
+    setMaterialDetails(materials);
   }, []);
 
   const handleFpsUpdate = useCallback((fps: number) => {
@@ -201,14 +209,13 @@ export default function Home() {
     setAnimationDurationSeconds(duration);
     setAnimationProgress(0);
     setAnimationCurrentTimeSeconds(0);
-    setIsPlayingAnimation(false); // Ensure animation is paused on new model load
-    setRequestPlayAnimation(false); // Explicitly request pause
-    setRequestAnimationSeek(0); // Explicitly seek to start
+    setIsPlayingAnimation(false); 
+    setRequestPlayAnimation(false); 
+    setRequestAnimationSeek(0); 
   }, []);
 
   const handleAnimationStateChange = useCallback((isPlaying: boolean) => {
     setIsPlayingAnimation(isPlaying);
-    // If animation stops by itself (e.g. ends), update requestPlay to reflect this
     if (!isPlaying) {
         setRequestPlayAnimation(false);
     }
@@ -229,8 +236,6 @@ export default function Home() {
     const newProgress = value[0];
     setAnimationProgress(newProgress);
     setRequestAnimationSeek(newProgress);
-    // If user scrubs, ensure the play state is re-asserted based on current button state
-    // This tells BabylonViewer to update to the new frame, and then either continue playing or stay paused.
     setRequestPlayAnimation(isPlayingAnimation); 
   }, [isPlayingAnimation]);
 
@@ -367,8 +372,31 @@ export default function Home() {
                 </div>
               )}
             </TabsContent>
-            <TabsContent value="materials" className="flex-grow mt-3">
-              <p className="text-sm text-muted-foreground italic p-2">Material details will be implemented later.</p>
+            <TabsContent value="materials" className="flex-grow mt-3 overflow-y-auto">
+              {!submittedModelUrl && !isLoading && !error ? (
+                <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                  <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
+                  <p className="text-sm font-medium text-foreground">No model loaded</p>
+                  <p className="text-xs text-muted-foreground">Open a 3D model to view its materials.</p>
+                </div>
+              ) : isLoading ? (
+                <p className="text-sm text-muted-foreground italic p-2">Loading materials...</p>
+              ) : error ? (
+                <p className="text-sm text-destructive italic p-2">Error loading model, materials unavailable.</p>
+              ) : materialDetails.length > 0 ? (
+                <ScrollArea className="h-full">
+                  <div className="space-y-2 p-1">
+                    {materialDetails.map((mat) => (
+                      <div key={mat.id} className="rounded-md border border-border bg-card p-2 text-sm shadow-sm">
+                        <p className="font-semibold text-foreground truncate" title={mat.name}>{mat.name}</p>
+                        <p className="text-xs text-muted-foreground">Type: {mat.type}</p>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <p className="text-sm text-muted-foreground italic p-2">No materials found in this model.</p>
+              )}
             </TabsContent>
           </Tabs>
         </aside>
@@ -414,6 +442,7 @@ export default function Home() {
                   onCameraReady={handleCameraReady}
                   onFpsUpdate={handleFpsUpdate}
                   onModelHierarchyReady={handleModelHierarchyReady}
+                  onMaterialsReady={handleMaterialsReady}
                   renderingMode={renderingMode}
                   nearClip={nearClip}
                   farClip={farClip}

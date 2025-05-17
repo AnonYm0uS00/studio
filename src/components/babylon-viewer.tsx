@@ -27,7 +27,7 @@ import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF';
 import '@babylonjs/loaders/OBJ';
 
-import type { ModelNode } from './types';
+import type { ModelNode, MaterialDetail } from './types';
 
 export type RenderingMode = 'shaded' | 'non-shaded' | 'wireframe';
 type EffectiveTheme = 'light' | 'dark';
@@ -39,6 +39,7 @@ interface BabylonViewerProps {
   onCameraReady: (camera: ArcRotateCamera) => void;
   onFpsUpdate?: (fps: number) => void;
   onModelHierarchyReady?: (hierarchy: ModelNode[]) => void;
+  onMaterialsReady?: (materials: MaterialDetail[]) => void;
   renderingMode: RenderingMode;
   nearClip: number;
   farClip: number;
@@ -59,6 +60,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   onCameraReady,
   onFpsUpdate,
   onModelHierarchyReady,
+  onMaterialsReady,
   renderingMode,
   nearClip,
   farClip,
@@ -99,52 +101,41 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if(groundMesh) {
       groundMesh.position.y = 0; 
     }
-    
-    // Removed scene.createDefaultEnvironment() calls to rely on Hemispheric lights
-    // and scene.clearColor for background.
   }, []);
 
 
   const applyRenderingModeStyle = useCallback((newRenderingMode: RenderingMode, container: Nullable<AssetContainer>, currentModelFileExtension: string | null) => {
     if (!container || !sceneRef.current) return;
 
-    // Skip for OBJ files as per previous request.
     if (currentModelFileExtension === '.obj') {
-        // console.log("Skipping rendering mode for OBJ");
-        return;
+      return;
     }
 
     const processSingleMaterial = (mat: Material) => {
-        // Universal reset for wireframe
-        mat.wireframe = false;
+      mat.wireframe = false; // Reset wireframe
+      mat.alpha = 1.0; // Reset alpha
 
-        if (mat instanceof PBRMaterial) {
-            mat.unlit = false; // Default to lit
-            if (newRenderingMode === 'non-shaded') {
-                mat.unlit = true;
-            } else if (newRenderingMode === 'wireframe') {
-                mat.wireframe = true;
-                mat.unlit = true; // Render wireframe unlit for clarity
-            }
-        } else if (mat instanceof StandardMaterial) {
-            mat.disableLighting = false; // Default to lit
-            if (newRenderingMode === 'non-shaded') {
-                mat.disableLighting = true;
-            } else if (newRenderingMode === 'wireframe') {
-                mat.wireframe = true;
-                mat.disableLighting = true; // Render wireframe unlit for clarity
-            }
-        } else { // For other material types, just handle wireframe if possible
-             if (newRenderingMode === 'wireframe') {
-                mat.wireframe = true;
-            }
+      if (mat instanceof PBRMaterial) {
+        mat.unlit = false;
+        if (newRenderingMode === 'non-shaded') {
+          mat.unlit = true;
+        } else if (newRenderingMode === 'wireframe') {
+          mat.wireframe = true;
+          mat.unlit = true; 
         }
-        
+      } else if (mat instanceof StandardMaterial) {
+        mat.disableLighting = false;
+        if (newRenderingMode === 'non-shaded') {
+          mat.disableLighting = true;
+        } else if (newRenderingMode === 'wireframe') {
+          mat.wireframe = true;
+          mat.disableLighting = true;
+        }
+      } else { // For other material types
         if (newRenderingMode === 'wireframe') {
-            mat.alpha = 1.0; // Ensure wireframe is opaque
+          mat.wireframe = true;
         }
-        
-        // mat.markAsDirty(Material.AllDirtyFlag); // Removed for performance
+      }
     };
     
     container.meshes.forEach((mesh: AbstractMesh) => {
@@ -215,10 +206,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     return () => {
       resizeObserver.disconnect();
-      if (animationProgressObserverRef.current && sceneRef.current) {
-        sceneRef.current.onBeforeRenderObservable.remove(animationProgressObserverRef.current);
-        animationProgressObserverRef.current = null;
-      }
       animationGroupsRef.current = null;
 
       if (loadedAssetContainerRef.current) {
@@ -326,6 +313,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     setIsCurrentModelActuallyLoaded(false); 
     if (onModelHierarchyReady) onModelHierarchyReady([]);
+    if (onMaterialsReady) onMaterialsReady([]);
     if (onAnimationsAvailable) onAnimationsAvailable(false, 0);
     animationGroupsRef.current = null;
     totalDurationSecondsRef.current = 0;
@@ -409,7 +397,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                   .filter(child => {
                       const sceneNodeNames = ["camera", "light1", "light2", "grid"];
                       const isSceneHelper = sceneNodeNames.some(name => child.name === name || child.name.startsWith(name + "_"));
-                      const isInternalLoaderNode = child.name.startsWith("__") && child.name.endsWith("__") && (!child.getChildren || child.getChildren().length === 0) && !(child instanceof Mesh);
+                      // Keep internal loader nodes if they are Meshes or have children, filter out empty TransformNodes starting with __
+                      const isInternalLoaderNode = child.name.startsWith("__") && child.name.endsWith("__") && !(child instanceof Mesh) && (!child.getChildren || child.getChildren().length === 0);
                       return !isSceneHelper && !isInternalLoaderNode;
                   })
                   .map(buildNodeHierarchy);
@@ -424,15 +413,34 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           
             const hierarchyRoots: ModelNode[] = container.rootNodes
               .filter(node => {
-                const sceneNodeNames = ["camera", "light1", "light2", "grid"];
+                 const sceneNodeNames = ["camera", "light1", "light2", "grid"];
                  const isSceneHelper = sceneNodeNames.some(name => node.name === name || node.name.startsWith(name + "_"));
-                const isActualModelRoot = (node.name.startsWith("__") && node.name.endsWith("__")) || (node.getChildren && node.getChildren().length > 0 && !isSceneHelper); // Be more inclusive of potential root nodes
-                return (isActualModelRoot || (!isSceneHelper && !(node instanceof HemisphericLight) && !(node instanceof ArcRotateCamera))) ;
+                 const isActualModelRoot = (node.name.startsWith("__") && node.name.endsWith("__")) || (node.getChildren && node.getChildren().length > 0 && !isSceneHelper);
+                 return isActualModelRoot || (!isSceneHelper && !(node instanceof HemisphericLight) && !(node instanceof ArcRotateCamera));
               })
               .map(buildNodeHierarchy);
           
             onModelHierarchyReady(hierarchyRoots);
           }
+
+        if (onMaterialsReady) {
+          const materials: MaterialDetail[] = [];
+          container.materials.forEach(mat => {
+            let type = "Unknown";
+            if (mat instanceof PBRMaterial) type = "PBRMaterial";
+            else if (mat instanceof StandardMaterial) type = "StandardMaterial";
+            else if (mat instanceof MultiMaterial) type = "MultiMaterial";
+            else type = mat.getClassName();
+            
+            materials.push({
+              id: mat.uniqueId.toString(),
+              name: mat.name || `Unnamed ${type}`,
+              type: type,
+            });
+          });
+          onMaterialsReady(materials);
+        }
+
 
         if (container.animationGroups && container.animationGroups.length > 0) {
             animationGroupsRef.current = container.animationGroups;
@@ -481,6 +489,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
         onModelLoaded(false, userMessage);
         setIsCurrentModelActuallyLoaded(false);
+        if (onMaterialsReady) onMaterialsReady([]);
         if (onAnimationsAvailable) onAnimationsAvailable(false, 0);
         if (grid) grid.position.y = 0; 
         if (loadedAssetContainerRef.current) { 
@@ -497,10 +506,11 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     modelUrl, 
     modelFileExtension, 
     onModelLoaded, 
-    onModelHierarchyReady, 
+    onModelHierarchyReady,
+    onMaterialsReady, 
     onAnimationsAvailable,
     internalResetCameraAndEnvironment,
-    renderingMode, 
+    sceneRef, cameraRef, // Added sceneRef and cameraRef for stability as they are used
   ]);
 
   useEffect(() => {
