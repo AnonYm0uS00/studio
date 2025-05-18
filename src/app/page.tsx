@@ -348,14 +348,14 @@ export default function Home() {
         setRequestFocusObject(true);
       }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error]); // Dependencies for handleKeyDown
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error]); 
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleKeyDown]); // Effect depends on handleKeyDown
+  }, [handleKeyDown]); 
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -617,44 +617,55 @@ export default function Home() {
             )}
             
             {submittedModelUrl && !isLoading && !error && (
-              <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-                <Button
-                  variant={isGridVisible ? "secondary" : "outline"}
-                  size="icon"
-                  onClick={() => setIsGridVisible(!isGridVisible)}
-                  title={isGridVisible ? "Hide Grid (Alt+G)" : "Show Grid (Alt+G)"}
-                  className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                >
-                  <Grid className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={isAutoRotating ? "secondary" : "outline"}
-                  size="icon"
-                  onClick={() => setIsAutoRotating(!isAutoRotating)}
-                  title={isAutoRotating ? "Stop Auto-Rotation" : "Start Auto-Rotation"}
-                  className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                >
-                  <RotateCw className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setRequestScreenshot(true)}
-                  title="Capture Screenshot"
-                  className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                >
-                  <Camera className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setRequestFocusObject(true)}
-                  title="Focus on Object (F)"
-                  className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                >
-                  <Focus className="h-4 w-4" />
-                </Button>
-              </div>
+              <>
+                <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+                  <Button
+                    variant={isGridVisible ? "secondary" : "outline"}
+                    size="icon"
+                    onClick={() => setIsGridVisible(!isGridVisible)}
+                    title={isGridVisible ? "Hide Grid (Alt+G)" : "Show Grid (Alt+G)"}
+                    className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                  >
+                    <Grid className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={isAutoRotating ? "secondary" : "outline"}
+                    size="icon"
+                    onClick={() => setIsAutoRotating(!isAutoRotating)}
+                    title={isAutoRotating ? "Stop Auto-Rotation" : "Start Auto-Rotation"}
+                    className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setRequestScreenshot(true)}
+                    title="Capture Screenshot"
+                    className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setRequestFocusObject(true)}
+                    title="Focus on Object (F)"
+                    className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                  >
+                    <Focus className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="absolute top-4 right-4 z-10 p-3 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md text-xs">
+                    <h3 className="font-semibold text-sm text-foreground mb-1">ShortKeys</h3>
+                    <ul className="space-y-0.5 text-muted-foreground">
+                        <li>Toggle Grid: <kbd>Alt</kbd> + <kbd>G</kbd></li>
+                        <li>Open File: <kbd>Ctrl</kbd> + <kbd>N</kbd></li>
+                        <li>Focus Model: <kbd>F</kbd></li>
+                    </ul>
+                </div>
+              </>
             )}
 
 
