@@ -657,7 +657,7 @@ export default function Home() {
                   </Button>
                 </div>
 
-                <div className="absolute top-4 right-4 z-10 p-3 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md text-xs">
+                <div className="absolute top-4 right-4 z-10 p-3 bg-transparent backdrop-blur-lg rounded-md shadow-lg text-xs">
                     <h3 className="font-semibold text-sm text-foreground mb-1">ShortKeys</h3>
                     <ul className="space-y-0.5 text-muted-foreground">
                         <li>Toggle Grid: <kbd>Alt</kbd> + <kbd>G</kbd></li>
