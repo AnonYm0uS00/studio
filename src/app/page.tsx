@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, GithubIcon, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, Info, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle, GithubIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode, MaterialDetail } from '@/components/types';
@@ -364,7 +364,7 @@ export default function Home() {
                 break;
         }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode]); 
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, isPlayingAnimation, hasAnimations, handlePlayPauseToggle]); 
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -452,7 +452,7 @@ export default function Home() {
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Info">
-                <GithubIcon className="h-4 w-4" />
+                <Info className="h-4 w-4" />
                 <span className="sr-only">Info</span>
               </Button>
             </DropdownMenuTrigger>
