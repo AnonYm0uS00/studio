@@ -346,7 +346,10 @@ export default function Home() {
       if (submittedModelUrl && !isLoading && !error) {
         setRequestFocusObject(true);
       }
-    } else if (!event.ctrlKey && !event.altKey && !event.metaKey) { // No modifiers for 1, 2, 3
+    } else if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'e') {
+      event.preventDefault();
+      toggleExplorerPanel();
+    } else if (!event.ctrlKey && !event.altKey && !event.metaKey) { 
         switch (event.key) {
             case '1':
                 event.preventDefault();
@@ -364,7 +367,7 @@ export default function Home() {
                 break;
         }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, isPlayingAnimation, hasAnimations, handlePlayPauseToggle]); 
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, toggleExplorerPanel]); 
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -487,7 +490,7 @@ export default function Home() {
               size="icon"
               onClick={toggleExplorerPanel}
               className="text-muted-foreground hover:text-accent-foreground h-7 w-7"
-              title="Toggle Model Explorer"
+              title="Toggle Model Explorer (E)"
             >
               {isExplorerCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               <span className="sr-only">Toggle Model Explorer</span>
@@ -691,6 +694,7 @@ export default function Home() {
                         <li>Toggle Grid: <kbd>Alt</kbd> + <kbd>G</kbd></li>
                         <li>Open File: <kbd>Ctrl</kbd> + <kbd>N</kbd></li>
                         <li>Focus Model: <kbd>F</kbd></li>
+                        <li>Toggle Explorer: <kbd>E</kbd></li>
                         <li>Shaded View: <kbd>1</kbd></li>
                         <li>Non-Shaded View: <kbd>2</kbd></li>
                         <li>Wireframe View: <kbd>3</kbd></li>
