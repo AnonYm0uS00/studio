@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, PackageIcon, Sun, Moon, Laptop, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, PackageIcon, Sun, Moon, Laptop, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, GithubIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode, MaterialDetail } from '@/components/types';
@@ -274,7 +274,7 @@ export default function Home() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Settings">
                 <Settings className="h-4 w-4" />
                 <span className="sr-only">Settings</span>
               </Button>
@@ -330,12 +330,23 @@ export default function Home() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <a href="https://github.com/Samscape0" target="_blank" rel="noopener noreferrer" title="Samscape0 GitHub Profile">
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
-              <InfoIcon className="h-4 w-4" />
-              <span className="sr-only">Info / GitHub Profile</span>
-            </Button>
-          </a>
+           <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Info">
+                <InfoIcon className="h-4 w-4" />
+                <span className="sr-only">Info</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="mr-2 w-56">
+              <DropdownMenuLabel className="text-xs font-semibold">About</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <a href="https://github.com/Samscape0" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full text-sm">
+                  <GithubIcon className="h-3.5 w-3.5" /> Samscape0
+                </a>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -357,6 +368,7 @@ export default function Home() {
               size="icon"
               onClick={toggleExplorerPanel}
               className="text-muted-foreground hover:text-accent-foreground h-7 w-7"
+              title="Toggle Model Explorer"
             >
               {isExplorerCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               <span className="sr-only">Toggle Model Explorer</span>
@@ -585,6 +597,7 @@ export default function Home() {
                         size="icon"
                         onClick={handlePlayPauseToggle}
                         className="h-7 w-7 text-foreground"
+                        title={isPlayingAnimation ? "Pause Animation" : "Play Animation"}
                       >
                         {isPlayingAnimation ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                       </Button>
