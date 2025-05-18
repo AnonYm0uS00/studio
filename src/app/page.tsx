@@ -445,8 +445,27 @@ export default function Home() {
     setIsRecordingTurntable(false);
     setRequestTurntableRecord(false);
     setTurntableProgress(100);
-    // In a real implementation, framesDataUrls would be used to create a GIF/video
-    toast({ title: "Turntable Captured", description: `${framesDataUrls.length} frames ready for GIF processing. (GIF creation not yet implemented)`, duration: 5000 });
+
+    if (framesDataUrls.length === 0) {
+      toast({ title: "Turntable Capture Failed", description: "No frames were captured.", variant: "destructive", duration: 5000 });
+      return;
+    }
+
+    const now = new Date();
+    const timestampPrefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+
+    framesDataUrls.forEach((dataUrl, index) => {
+      const link = document.createElement('a');
+      // Pad frame number for consistent sorting (e.g., 001, 002, ... 075)
+      const frameNumber = String(index + 1).padStart(3, '0');
+      link.download = `Open3D_Turntable_${timestampPrefix}_Frame_${frameNumber}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+    
+    toast({ title: "Turntable Captured", description: `${framesDataUrls.length} frames downloaded as an image sequence.`, duration: 7000 });
   }, [toast]);
 
 
@@ -931,3 +950,4 @@ export default function Home() {
     </div>
   );
 }
+
