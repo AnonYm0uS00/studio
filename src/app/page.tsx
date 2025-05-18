@@ -4,8 +4,7 @@ import { useState, useRef, useCallback, useEffect, ChangeEvent, DragEvent } from
 import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-// import { BabylonViewer } from '@/components/babylon-viewer'; // Removed static import
-import dynamic from 'next/dynamic'; // Added for lazy loading
+import { BabylonViewer } from '@/components/babylon-viewer'; // Reverted to static import
 import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle, GithubIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,22 +25,8 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// Dynamically import BabylonViewer
-const DynamicBabylonViewer = dynamic(() => import('@/components/babylon-viewer').then(mod => mod.BabylonViewer), {
-  ssr: false, // Babylon.js needs window object, so disable SSR
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-background">
-      <div className="flex flex-col items-center bg-card p-8 rounded-lg shadow-xl">
-        <svg className="animate-spin h-10 w-10 text-primary mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <p className="text-foreground text-lg">Loading 3D Viewer...</p>
-      </div>
-    </div>
-  )
-});
-
+// Tauri API dynamic imports will remain in handleScreenshotTaken
+// Removed dynamic import for BabylonViewer
 
 type Theme = "light" | "dark" | "system";
 type EffectiveTheme = "light" | "dark";
@@ -168,10 +153,10 @@ export default function Home() {
     }
   }, [theme]); 
 
- const processFile = useCallback((file: File | null) => {
+  const processFile = useCallback((file: File | null) => {
     if (!file) {
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""; // Reset file input
+        fileInputRef.current.value = "";
       }
       return;
     }
@@ -207,7 +192,7 @@ export default function Home() {
       });
       setIsLoading(false);
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""; // Reset file input
+        fileInputRef.current.value = ""; 
       }
       return;
     }
@@ -228,8 +213,9 @@ export default function Home() {
       setIsLoading(false);
     };
     reader.readAsDataURL(file);
+
     if (fileInputRef.current) {
-      fileInputRef.current.value = ""; // Reset file input after processing
+      fileInputRef.current.value = ""; 
     }
   }, [acceptedFileTypes, toast]);
 
@@ -243,7 +229,6 @@ export default function Home() {
       return;
     }
     processFile(files[0]);
-    // Don't reset event.target.value here, processFile will do it if fileInputRef.current exists
   }, [processFile]);
 
   const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -346,7 +331,7 @@ export default function Home() {
     event.stopPropagation();
     setTimeout(() => {
         const relatedTarget = event.relatedTarget as Node;
-        if (!event.currentTarget.contains(relatedTarget)) {
+        if (event.currentTarget && !event.currentTarget.contains(relatedTarget)) { // Added check for event.currentTarget
             setIsDraggingOver(false);
         }
     }, 50);
@@ -460,6 +445,7 @@ export default function Home() {
       } catch (e) {
         console.error("Tauri screenshot save error:", e);
         toast({ title: "Save Error", description: "Could not save screenshot via Tauri. " + (e instanceof Error ? e.message : String(e)), variant: "destructive" });
+        // Fallback to browser download if Tauri save fails
         const link = document.createElement('a');
         const now = new Date();
         const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
@@ -472,6 +458,7 @@ export default function Home() {
         setRequestScreenshot(false);
       }
     } else {
+      // Browser-based download
       const link = document.createElement('a');
       const now = new Date();
       const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
@@ -587,8 +574,8 @@ export default function Home() {
             variant="ghost" 
             size="icon" 
             className="text-muted-foreground hover:text-accent-foreground h-8 w-8"
-            onClick={triggerFileDialog}
-            title="Open new file (Ctrl+N)"
+            onClick={triggerFileDialog} // Made functional again
+            title="Open new file (Ctrl+N)" // Title added
           >
             <FileText className="h-4 w-4" />
             <span className="sr-only">Open File</span>
@@ -814,7 +801,7 @@ export default function Home() {
             )}
 
             {(submittedModelUrl || isLoading || error) && (
-              <DynamicBabylonViewer
+              <BabylonViewer // Reverted from DynamicBabylonViewer
                   modelUrl={submittedModelUrl}
                   modelFileExtension={modelFileExtension}
                   onModelLoaded={handleModelLoaded}
@@ -1019,4 +1006,3 @@ export default function Home() {
     </div>
   );
 }
-
