@@ -23,6 +23,7 @@ import {
   Mesh,
   AnimationGroup,
   Tools,
+  Texture,
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF';
@@ -54,6 +55,8 @@ interface BabylonViewerProps {
   onAnimationProgressUpdate?: (progress: number, currentTime: number, totalDuration: number) => void;
   requestScreenshot: boolean;
   onScreenshotTaken: (dataUrl: string) => void;
+  requestFocusObject?: boolean;
+  onObjectFocused?: () => void;
 }
 
 export const BabylonViewer: React.FC<BabylonViewerProps> = ({
@@ -77,6 +80,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   onAnimationProgressUpdate,
   requestScreenshot,
   onScreenshotTaken,
+  requestFocusObject,
+  onObjectFocused,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Nullable<Engine>>(null);
@@ -90,7 +95,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   const frameRateRef = useRef<number>(60);
   const isPlayingInternalRef = useRef<boolean>(false);
   const animationProgressObserverRef = useRef<any>(null);
-
 
   const internalResetCameraAndEnvironment = useCallback(() => {
     const scene = sceneRef.current;
@@ -130,18 +134,18 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
 
   const applyRenderingModeStyle = useCallback((newRenderingMode: RenderingMode, container: Nullable<AssetContainer>, currentModelFileExtension: string | null) => {
-    if (currentModelFileExtension === '.obj') {
-        return; 
-    }
     if (!container || !sceneRef.current) return;
+    if (currentModelFileExtension === '.obj') { // Skip OBJ for rendering modes
+      return;
+    }
 
     const processSingleMaterial = (mat: Material) => {
-      mat.wireframe = false; // Reset wireframe
-      mat.alpha = 1.0; // Default to opaque
+      mat.wireframe = false;
+      mat.alpha = 1.0; 
 
       if (mat instanceof PBRMaterial) {
         mat.unlit = false;
-        if (mat.albedoTexture && mat.albedoTexture.hasAlpha && mat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) {
+         if (mat.albedoTexture && mat.albedoTexture.hasAlpha && mat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) {
             mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
         } else if (mat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) {
             mat.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
@@ -198,8 +202,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     camera.wheelPrecision = 50;
     camera.lowerRadiusLimit = 0.1;
     camera.upperRadiusLimit = 20000; 
-    camera.minZ = nearClip; 
-    camera.maxZ = farClip;  
     cameraRef.current = camera; 
     onCameraReady(camera);
     
@@ -207,14 +209,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     light1.intensity = 1.0;
     const light2 = new HemisphericLight("light2", new Vector3(-1, -1, -0.5), scene); 
     light2.intensity = 0.7;
-
-    scene.createDefaultEnvironment({
-        createSkybox: false, 
-        createGround: false,
-        skyboxSize: 150, 
-        enableGroundShadow: false, 
-    });
-    scene.environmentIntensity = 1.0;
     
     const ground = MeshBuilder.CreateGround("grid", {width: 100, height: 100, subdivisions: 10}, scene);
     const gridMaterial = new GridMaterial("gridMaterial", scene);
@@ -273,7 +267,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       }
       cameraRef.current = null;
     };
-  }, [onCameraReady]); 
+  }, [onCameraReady, onFpsUpdate]); 
 
 
   // Effect for scene.onBeforeRenderObservable (auto-rotate, animation progress)
@@ -349,7 +343,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);   
       }
     }
-  }, [effectiveTheme]);
+  }, [effectiveTheme, sceneRef]); // Ensure sceneRef is dependency
 
 
   // Effect for loading the model
@@ -377,7 +371,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     if (!modelUrl) {
         internalResetCameraAndEnvironment(); 
-        if (grid) grid.position.y = 0; 
         return;
     }
 
@@ -400,17 +393,15 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         container.materials.forEach(mat => {
             const processMaterialForCulling = (materialInstance: Material) => {
                 materialInstance.backFaceCulling = false;
-                // Re-affirm transparency for PBR materials
                 if (materialInstance instanceof PBRMaterial) {
                     const pbrMat = materialInstance as PBRMaterial;
                     if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
-                        if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST &&
-                            pbrMat.alphaMode !== Engine.ALPHA_COMBINE) { // Check existing alphaMode before overriding
+                        if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST && pbrMat.alphaMode !== Engine.ALPHA_COMBINE) {
                             pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
                         }
                         pbrMat.useAlphaFromAlbedoTexture = true;
                     } else if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) {
-                        pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
+                         pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
                     }
                 }
             };
@@ -449,32 +440,40 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                         grid.position.y = modelBoundingMin.y - 0.01; 
                     }
                     scene.createDefaultEnvironment({
-                        createSkybox: false, // No visual skybox
-                        createGround: false, // No default ground
+                        createSkybox: false, 
+                        createGround: false,
                         skyboxSize: Math.max(150, (modelBoundingMax.subtract(modelBoundingMin)).length() * 2),
                         enableGroundShadow: false,
                     });
                     scene.environmentIntensity = 1.0;
+                     if (effectiveTheme === 'light') {
+                        scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
+                    } else { 
+                        scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
+                    }
                 } else {
                     internalResetCameraAndEnvironment();
-                    if(grid) grid.position.y = 0;
                 }
             } else {
                 internalResetCameraAndEnvironment();
-                 if(grid) grid.position.y = 0;
             }
         } else {
             internalResetCameraAndEnvironment();
-            if(grid) grid.position.y = 0;
         }
-
-        if (effectiveTheme === 'light') {
-          scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
-        } else { 
-          scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
-        }
-
+        
         applyRenderingModeStyle(renderingMode, container, modelFileExtension); 
+
+        container.materials.forEach(mat => {
+            if (mat instanceof PBRMaterial) {
+                const pbrMat = mat as PBRMaterial;
+                if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
+                    if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST && pbrMat.alphaMode !== Engine.ALPHA_COMBINE) {
+                        pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+                    }
+                    pbrMat.useAlphaFromAlbedoTexture = true;
+                }
+            }
+        });
         
         onModelLoaded(true);
         setIsCurrentModelActuallyLoaded(true); 
@@ -487,8 +486,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           
               const children = (babylonNode.getChildren ? babylonNode.getChildren() : [])
                   .filter(child => {
-                      const sceneHelperNodeNames = ["camera", "light1", "light2", "grid", "BackgroundPlane", "BackgroundSkybox"]; 
-                      return !sceneHelperNodeNames.some(helperName => child.name.startsWith(helperName) || child.name.includes(helperName) || child.name === "__root__");
+                      return !child.name.startsWith("__") && child.name !== "camera" && child.name !== "light1" && child.name !== "light2" && child.name !== "grid" && child.name !== "BackgroundPlane" && child.name !== "BackgroundSkybox";
                   })
                   .map(buildNodeHierarchy);
           
@@ -502,8 +500,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           
             const hierarchyRoots: ModelNode[] = container.rootNodes
               .filter(node => {
-                 const sceneHelperNodeNames = ["camera", "light1", "light2", "grid", "BackgroundPlane", "BackgroundSkybox"];
-                 return !sceneHelperNodeNames.some(helperName => node.name.startsWith(helperName) || node.name.includes(helperName));
+                 return !node.name.startsWith("__") && node.name !== "camera" && node.name !== "light1" && node.name !== "light2" && node.name !== "grid" && node.name !== "BackgroundPlane" && node.name !== "BackgroundSkybox";
               })
               .map(buildNodeHierarchy);
           
@@ -579,7 +576,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         if (onModelHierarchyReady) onModelHierarchyReady([]);
         if (onMaterialsReady) onMaterialsReady([]);
         if (onAnimationsAvailable) onAnimationsAvailable(false, 0);
-        if (grid) grid.position.y = 0; 
         if (loadedAssetContainerRef.current) { 
             loadedAssetContainerRef.current.removeAllFromScene();
             loadedAssetContainerRef.current.dispose();
@@ -599,7 +595,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     internalResetCameraAndEnvironment,
     applyRenderingModeStyle, 
     effectiveTheme, 
-    renderingMode 
+    renderingMode,
+    sceneRef, // Added sceneRef
+    cameraRef // Added cameraRef
   ]);
 
   // Effect for applying rendering mode when it changes
@@ -667,13 +665,87 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       Tools.CreateScreenshotUsingRenderTarget(
         engineRef.current,
         sceneRef.current.activeCamera,
-        { precision: 1.0 }, // can be an object with width/height or precision
+        { precision: 1.0 }, 
         (data) => {
           onScreenshotTaken(data);
         }
       );
     }
   }, [requestScreenshot, onScreenshotTaken]);
+
+  const focusOnLoadedModel = useCallback(() => {
+    if (!cameraRef.current || !loadedAssetContainerRef.current || !sceneRef.current) return;
+
+    const container = loadedAssetContainerRef.current;
+    const scene = sceneRef.current;
+    const camera = cameraRef.current;
+    const grid = scene.getMeshByName("grid");
+
+    const allModelMeshes = container.meshes.filter(m =>
+      m.name !== "grid" &&
+      !(m instanceof HemisphericLight) &&
+      !(m instanceof ArcRotateCamera) &&
+      !m.name.startsWith("__") &&
+      !m.name.endsWith("__")
+    );
+
+    let modelBoundingMin = new Vector3(Infinity, Infinity, Infinity);
+    let modelBoundingMax = new Vector3(-Infinity, -Infinity, -Infinity);
+
+    if (allModelMeshes.length > 0) {
+      const visibleEnabledMeshes = allModelMeshes.filter(m => m.isVisible && m.isEnabled());
+
+      if (visibleEnabledMeshes.length > 0) {
+        visibleEnabledMeshes.forEach(mesh => mesh.computeWorldMatrix(true));
+        camera.zoomOn(visibleEnabledMeshes, true);
+
+        visibleEnabledMeshes.forEach((meshNode: AbstractMesh) => {
+          const boundingInfo = meshNode.getBoundingInfo();
+          if (boundingInfo) {
+            modelBoundingMin = Vector3.Minimize(modelBoundingMin, boundingInfo.boundingBox.minimumWorld);
+            modelBoundingMax = Vector3.Maximize(modelBoundingMax, boundingInfo.boundingBox.maximumWorld);
+          }
+        });
+
+        if (modelBoundingMin.x !== Infinity) {
+          if (grid) {
+            grid.position.y = modelBoundingMin.y - 0.01;
+          }
+          const oldEnv = scene.environmentTexture;
+          if (oldEnv) {
+            oldEnv.dispose();
+            scene.environmentTexture = null;
+          }
+          scene.createDefaultEnvironment({
+            createSkybox: false,
+            createGround: false,
+            skyboxSize: Math.max(150, (modelBoundingMax.subtract(modelBoundingMin)).length() * 2),
+            enableGroundShadow: false,
+          });
+          scene.environmentIntensity = 1.0;
+           if (effectiveTheme === 'light') {
+            scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
+          } else {
+            scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
+          }
+        } else { 
+          internalResetCameraAndEnvironment();
+        }
+      } else { 
+        internalResetCameraAndEnvironment();
+      }
+    } else { 
+      internalResetCameraAndEnvironment();
+    }
+  }, [internalResetCameraAndEnvironment, effectiveTheme]);
+
+
+  useEffect(() => {
+    if (requestFocusObject && isCurrentModelActuallyLoaded && onObjectFocused) {
+      focusOnLoadedModel();
+      onObjectFocused();
+    }
+  }, [requestFocusObject, isCurrentModelActuallyLoaded, onObjectFocused, focusOnLoadedModel]);
 
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;

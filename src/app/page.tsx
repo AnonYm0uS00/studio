@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, PackageIcon, Sun, Moon, Laptop, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, GithubIcon, Camera } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, PackageIcon, Sun, Moon, Laptop, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, GithubIcon, Camera, Focus } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode, MaterialDetail } from '@/components/types';
@@ -65,6 +65,9 @@ export default function Home() {
 
   // Screenshot state
   const [requestScreenshot, setRequestScreenshot] = useState<boolean>(false);
+
+  // Focus state
+  const [requestFocusObject, setRequestFocusObject] = useState<boolean>(false);
 
 
   useEffect(() => {
@@ -126,7 +129,7 @@ export default function Home() {
     const file = event.target.files?.[0];
     if (!file) { 
       if (event.target) { 
-        event.target.value = ""; // Reset input to allow re-selection of the same file if dialog is cancelled then re-opened
+        event.target.value = ""; 
       }
       return;
     }
@@ -162,7 +165,7 @@ export default function Home() {
         toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
       }
        if (event.target) { 
-        event.target.value = ""; // Reset input after processing
+        event.target.value = ""; 
       }
     };
     reader.onerror = () => {
@@ -170,7 +173,7 @@ export default function Home() {
       setIsLoading(false);
       toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
        if (event.target) { 
-        event.target.value = ""; // Reset input on error
+        event.target.value = ""; 
       }
     };
     reader.readAsDataURL(file);
@@ -186,7 +189,6 @@ export default function Home() {
       setHasAnimations(false);
     } else {
       setError(null); 
-      // toast({ title: "Success", description: "Model loaded successfully."}); // Removed as per user request
     }
   }, [toast]);
 
@@ -269,6 +271,10 @@ export default function Home() {
     setRequestScreenshot(false); // Reset the trigger
     toast({ title: "Screenshot Captured", description: "Image downloaded successfully." });
   }, [toast]);
+
+  const handleObjectFocused = useCallback(() => {
+    setRequestFocusObject(false);
+  }, []);
 
 
   return (
@@ -516,6 +522,8 @@ export default function Home() {
                   onAnimationProgressUpdate={handleAnimationProgressUpdate}
                   requestScreenshot={requestScreenshot}
                   onScreenshotTaken={handleScreenshotTaken}
+                  requestFocusObject={requestFocusObject}
+                  onObjectFocused={handleObjectFocused}
               />
             )}
             
@@ -547,6 +555,15 @@ export default function Home() {
                   className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
                 >
                   <Camera className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setRequestFocusObject(true)}
+                  title="Focus on Object"
+                  className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                >
+                  <Focus className="h-4 w-4" />
                 </Button>
               </div>
             )}
