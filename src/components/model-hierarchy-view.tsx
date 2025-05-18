@@ -56,7 +56,7 @@ export const ModelHierarchyView: React.FC<HierarchyNodeViewProps> = ({ node, def
             onClick={handleVisibilityClick}
             title="Toggle visibility. Ctrl+Click to isolate. If isolated, Ctrl+Click again to show all."
           >
-            {isCurrentlyVisible ? <Eye className="h-3.5 w-3.5 text-accent-foreground" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
+            {isCurrentlyVisible ? <Eye className="h-3.5 w-3.5 text-accent" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
           </Button>
         )}
         {!isMesh && hasChildren && <div className="w-5 mr-1 flex-shrink-0" /> /* Placeholder for alignment */}
@@ -84,3 +84,4 @@ export const ModelHierarchyView: React.FC<HierarchyNodeViewProps> = ({ node, def
     </li>
   );
 };
+
