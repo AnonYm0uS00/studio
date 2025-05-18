@@ -190,7 +190,7 @@ export default function Home() {
   const handleModelHierarchyReady = useCallback((hierarchy: ModelNode[]) => {
     setModelHierarchy(hierarchy);
   }, []);
-
+  
   const handleMaterialsReady = useCallback((materials: MaterialDetail[]) => {
     setMaterialDetails(materials);
   }, []);
@@ -258,9 +258,15 @@ export default function Home() {
         <h1 className="text-lg font-semibold text-primary">3D Viewer</h1>
         <div className="text-sm text-muted-foreground">{modelName || "No model loaded"}</div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="text-muted-foreground hover:text-accent-foreground h-8 w-8"
+            onClick={triggerFileDialog}
+            title="Open new file"
+          >
             <FileText className="h-4 w-4" />
-            <span className="sr-only">Documentation</span>
+            <span className="sr-only">Open File</span>
           </Button>
 
           <DropdownMenu>
@@ -607,3 +613,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
