@@ -421,7 +421,7 @@ export default function Home() {
                 break;
         }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error, toggleExplorerPanel, modelHierarchy, isSoloActive, handleToggleMeshVisibility, isRecordingTurntable, setIsGridVisible, setRequestFocusObject, setRenderingMode]); 
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, toggleExplorerPanel, isRecordingTurntable, setIsGridVisible, setRequestFocusObject, setRenderingMode]); 
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -441,12 +441,12 @@ export default function Home() {
     setTurntableProgress(0);
   }, [isRecordingTurntable, submittedModelUrl, isLoading, error, toast]);
 
-  const handleTurntableComplete = useCallback((framesCount: number) => {
+  const handleTurntableComplete = useCallback((framesDataUrls: string[]) => {
     setIsRecordingTurntable(false);
     setRequestTurntableRecord(false);
     setTurntableProgress(100);
     // In a real implementation, framesDataUrls would be used to create a GIF/video
-    toast({ title: "Turntable Captured", description: `${framesCount} frames ready for GIF processing. (GIF creation not yet implemented)`, duration: 5000 });
+    toast({ title: "Turntable Captured", description: `${framesDataUrls.length} frames ready for GIF processing. (GIF creation not yet implemented)`, duration: 5000 });
   }, [toast]);
 
 
@@ -931,4 +931,3 @@ export default function Home() {
     </div>
   );
 }
-

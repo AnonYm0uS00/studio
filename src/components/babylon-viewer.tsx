@@ -60,7 +60,7 @@ interface BabylonViewerProps {
   hiddenMeshIds?: Set<string>;
   recordTurntableTrigger?: boolean;
   onTurntableProgressUpdate?: (progress: number) => void;
-  onTurntableComplete?: (framesCount: number) => void;
+  onTurntableComplete?: (framesDataUrls: string[]) => void;
 }
 
 const isHelperNodeByName = (nodeName: string): boolean => {
@@ -153,42 +153,57 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     newRenderingMode: RenderingMode,
     container: Nullable<AssetContainer>
   ) => {
+    if (modelFileExtension === '.obj') { 
+      // For OBJ, if issues persist, we can choose to not apply or apply differently
+      // For now, attempt the same logic but be aware it might not be as effective.
+    }
     if (!container || !sceneRef.current ) return;
     
     const processSingleMaterial = (mat: Material) => {
-      // Defaults for 'shaded'
+      // Always reset wireframe before applying mode
       mat.wireframe = false;
+      
       if (mat instanceof PBRMaterial) {
-        mat.unlit = false;
-      } else if (mat instanceof StandardMaterial) {
-        mat.disableLighting = false;
-        mat.emissiveColor = mat.emissiveColor || new Color3(0,0,0); 
-        mat.ambientColor = mat.ambientColor || new Color3(0,0,0); 
-      }
-
-      // Apply specific mode
-      switch (newRenderingMode) {
-        case 'non-shaded':
-          if (mat instanceof PBRMaterial) {
+        switch (newRenderingMode) {
+          case 'shaded':
+            mat.unlit = false;
+            break;
+          case 'non-shaded':
             mat.unlit = true;
-          } else if (mat instanceof StandardMaterial) {
+            break;
+          case 'wireframe':
+            mat.wireframe = true;
+            mat.unlit = true; // Render wireframe on an unlit base
+            break;
+        }
+      } else if (mat instanceof StandardMaterial) {
+        switch (newRenderingMode) {
+          case 'shaded':
+            mat.disableLighting = false;
+            // Restore potentially modified emissive/ambient colors if needed for shaded OBJ
+            // This might require storing original values or using a less aggressive reset.
+            // For now, we assume PBR-like behavior is desired for consistency.
+            mat.emissiveColor = mat.emissiveColor || new Color3(0,0,0); // ensure it's not null
+            mat.ambientColor = mat.ambientColor || new Color3(0,0,0); // ensure it's not null
+            break;
+          case 'non-shaded':
             mat.disableLighting = true;
             mat.emissiveColor = Color3.Black(); 
-            mat.ambientColor = Color3.Black(); 
-          }
-          break;
-        case 'wireframe':
+            mat.ambientColor = Color3.Black();
+            break;
+          case 'wireframe':
+            mat.wireframe = true;
+            mat.disableLighting = true;
+            mat.emissiveColor = Color3.Black();
+            mat.ambientColor = Color3.Black();
+            break;
+        }
+      } else { // For other material types, only apply wireframe if requested
+        if (newRenderingMode === 'wireframe') {
           mat.wireframe = true;
-          if (mat instanceof PBRMaterial) {
-            mat.unlit = true; 
-          } else if (mat instanceof StandardMaterial) {
-            mat.disableLighting = true;
-            mat.emissiveColor = Color3.Black(); 
-            mat.ambientColor = Color3.Black(); 
-          }
-          break;
+        }
       }
-      mat.markAsDirty(Material.AllDirtyFlag);
+      // mat.markAsDirty(Material.AllDirtyFlag); // Keep this if OBJ still has issues updating
     };
     
     container.meshes.forEach((mesh: AbstractMesh) => {
@@ -202,7 +217,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             processSingleMaterial(mesh.material);
         }
     });
-  }, []); 
+  }, [modelFileExtension]); // Added modelFileExtension
 
 
   // Effect for initial engine, scene, camera, lights, grid setup
@@ -242,6 +257,10 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     
     scene.createDefaultEnvironment({ createSkybox: false, createGround: false, skyboxSize: 150, enableGroundShadow: false });
     scene.environmentIntensity = 1.0;
+    if (scene.environmentTexture) {
+      // scene.environmentTexture.samplingMode = Texture.TRILINEAR_SAMPLINGMODE; // Removed due to error
+    }
+
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -438,6 +457,10 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                         enableGroundShadow: false,
                     });
                     scene.environmentIntensity = 1.0;
+                    if (scene.environmentTexture) {
+                        // scene.environmentTexture.samplingMode = Texture.TRILINEAR_SAMPLINGMODE; // Removed
+                    }
+
                     if (effectiveTheme === 'light') {
                         scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
                     } else {
@@ -464,7 +487,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                 if (materialInstance instanceof PBRMaterial) {
                     const pbrMat = materialInstance as PBRMaterial;
                     if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
-                        if (pbrMat.alphaMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) { 
+                        if (pbrMat.alphaMode !== PBRMaterial.PBRMATERIAL_ALPHATEST && pbrMat.alphaMode !== PBRMaterial.PBRMATERIAL_ALPHABLEND_AND_TEST) { 
                             pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
                         }
                         pbrMat.useAlphaFromAlbedoTexture = true;
@@ -473,6 +496,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     const stdMat = materialInstance as StandardMaterial;
                     if (stdMat.diffuseTexture && stdMat.diffuseTexture.hasAlpha) {
                         stdMat.useAlphaFromDiffuseTexture = true;
+                        stdMat.alpha = stdMat.alpha === 0 ? 1 : stdMat.alpha; // ensure not fully transparent if alpha was 0
                     }
                 }
             };
@@ -604,7 +628,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     applyRenderingModeStyle,
     renderingMode,         
     effectiveTheme,
-    sceneRef // Added sceneRef as it's used
+    sceneRef 
   ]);
 
   // Effect for applying rendering mode when it changes
@@ -774,7 +798,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
   // Effect for Turntable Recording
   useEffect(() => {
-    if (recordTurntableTrigger && !isBusyRecordingTurntableRef.current && engineRef.current && sceneRef.current && cameraRef.current) {
+    if (recordTurntableTrigger && !isBusyRecordingTurntableRef.current && engineRef.current && sceneRef.current && cameraRef.current && onTurntableComplete && onTurntableProgressUpdate) {
       isBusyRecordingTurntableRef.current = true;
       const engine = engineRef.current;
       const scene = sceneRef.current;
@@ -799,8 +823,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           camera.alpha = initialAlpha;
           camera.beta = initialBeta; 
           camera.radius = initialRadius; 
-          camera.attachControl(canvasRef.current!, true);
-          if (onTurntableComplete) onTurntableComplete(capturedFramesDataUrls.length);
+          if(canvasRef.current) camera.attachControl(canvasRef.current, true);
+          onTurntableComplete(capturedFramesDataUrls);
           isBusyRecordingTurntableRef.current = false;
           return;
         }
@@ -808,11 +832,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         const progressRatio = currentFrameIndex / TOTAL_FRAMES;
         camera.alpha = initialAlpha + progressRatio * (2 * Math.PI); 
 
-        if (onTurntableProgressUpdate) {
-          onTurntableProgressUpdate(((currentFrameIndex + 1) / TOTAL_FRAMES) * 100);
-        }
+        onTurntableProgressUpdate(((currentFrameIndex + 1) / TOTAL_FRAMES) * 100);
         
-        scene.render();
+        scene.render(); // Ensure scene is rendered before screenshot
 
         const dataUrl = await new Promise<string>(resolveCapture => {
           Tools.CreateScreenshotUsingRenderTarget(
@@ -837,8 +859,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             camera.alpha = initialAlpha;
             camera.beta = initialBeta;
             camera.radius = initialRadius;
-            camera.attachControl(canvasRef.current!, true);
-            if (onTurntableComplete) onTurntableComplete(capturedFramesDataUrls.length); 
+            if(canvasRef.current) camera.attachControl(canvasRef.current, true);
+            onTurntableComplete(capturedFramesDataUrls); 
         }
       };
 
