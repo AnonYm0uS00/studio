@@ -166,7 +166,7 @@ export default function Home() {
     setModelHierarchy([]); 
     setMaterialDetails([]);
     setHiddenMeshIds(new Set()); 
-    setIsSoloActive(false); // Reset solo state
+    setIsSoloActive(false);
     // Reset animation states
     setHasAnimations(false);
     setIsPlayingAnimation(false);
@@ -302,11 +302,9 @@ export default function Home() {
   const handleToggleMeshVisibility = useCallback((meshId: string, ctrlPressed: boolean) => {
     if (ctrlPressed) {
       if (isSoloActive) {
-        // If solo is active, Ctrl+Click again unhides all
         setHiddenMeshIds(new Set());
         setIsSoloActive(false);
       } else {
-        // If solo is not active, Ctrl+Click solos the selected mesh
         const allIdsInScene = getAllMeshIdsFromHierarchy(modelHierarchy);
         const newHiddenIds = new Set<string>();
         for (const id of allIdsInScene) {
@@ -318,7 +316,6 @@ export default function Home() {
         setIsSoloActive(true);
       }
     } else {
-      // Normal click toggles visibility and deactivates solo mode
       setIsSoloActive(false);
       setHiddenMeshIds(prevIds => {
         const newIds = new Set(prevIds);
@@ -332,6 +329,33 @@ export default function Home() {
     }
   }, [modelHierarchy, isSoloActive]);
 
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    // Check if focus is on an input element, if so, don't trigger shortcuts
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+    }
+    
+    if (event.altKey && event.key.toLowerCase() === 'g') {
+      event.preventDefault();
+      setIsGridVisible(prev => !prev);
+    } else if (event.ctrlKey && event.key.toLowerCase() === 'n') {
+      event.preventDefault();
+      triggerFileDialog();
+    } else if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      // Ensure a model is loaded before trying to focus
+      if (submittedModelUrl && !isLoading && !error) {
+        setRequestFocusObject(true);
+      }
+    }
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error]); // Dependencies for handleKeyDown
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]); // Effect depends on handleKeyDown
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -345,7 +369,7 @@ export default function Home() {
             size="icon" 
             className="text-muted-foreground hover:text-accent-foreground h-8 w-8"
             onClick={triggerFileDialog}
-            title="Open new file"
+            title="Open new file (Ctrl+N)"
           >
             <FileText className="h-4 w-4" />
             <span className="sr-only">Open File</span>
@@ -598,7 +622,7 @@ export default function Home() {
                   variant={isGridVisible ? "secondary" : "outline"}
                   size="icon"
                   onClick={() => setIsGridVisible(!isGridVisible)}
-                  title={isGridVisible ? "Hide Grid" : "Show Grid"}
+                  title={isGridVisible ? "Hide Grid (Alt+G)" : "Show Grid (Alt+G)"}
                   className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
                 >
                   <Grid className="h-4 w-4" />
@@ -625,7 +649,7 @@ export default function Home() {
                   variant="outline"
                   size="icon"
                   onClick={() => setRequestFocusObject(true)}
-                  title="Focus on Object"
+                  title="Focus on Object (F)"
                   className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
                 >
                   <Focus className="h-4 w-4" />
@@ -741,3 +765,4 @@ export default function Home() {
     </div>
   );
 }
+
