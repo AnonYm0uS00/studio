@@ -808,7 +808,7 @@ export default function Home() {
       </div>
 
       {/* Bottom Bar */}
-      <footer className="h-8 flex-shrink-0 border-t border-border bg-card/70 backdrop-blur-md flex items-center px-4 shadow-md">
+      <footer className="h-8 flex-shrink-0 border-t border-border bg-card/70 backdrop-blur-md flex items-center justify-start px-4 shadow-md">
         <p className="text-xs text-muted-foreground">
             Version: 0.2.0
         </p>
@@ -817,3 +817,5 @@ export default function Home() {
   );
 }
 
+
+    
