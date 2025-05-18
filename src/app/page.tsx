@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop, Grid, Play, Pause, TimerIcon, RotateCw } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, PackageIcon, Sun, Moon, Laptop, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode, MaterialDetail } from '@/components/types';
@@ -142,7 +142,6 @@ export default function Home() {
       setAnimationCurrentTimeSeconds(0);
       setRequestPlayAnimation(undefined);
       setRequestAnimationSeek(undefined);
-
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -348,7 +347,7 @@ export default function Home() {
               onClick={toggleExplorerPanel}
               className="text-muted-foreground hover:text-accent-foreground h-7 w-7"
             >
-              <SlidersHorizontal className="h-4 w-4" />
+              {isExplorerCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               <span className="sr-only">Toggle Model Explorer</span>
             </Button>
           </div>
@@ -608,4 +607,3 @@ export default function Home() {
     </div>
   );
 }
-
