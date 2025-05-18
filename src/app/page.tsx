@@ -1,11 +1,11 @@
 
 'use client';
-import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react';
+import { useState, useRef, useCallback, useEffect, ChangeEvent, DragEvent } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, SlidersHorizontal, PackageIcon, Sun, Moon, Laptop, Grid, Play, Pause, TimerIcon, RotateCw } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle, GithubIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode, MaterialDetail } from '@/components/types';
@@ -23,11 +23,27 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 
 type Theme = "light" | "dark" | "system";
 type EffectiveTheme = "light" | "dark";
 export type RenderingMode = 'shaded' | 'non-shaded' | 'wireframe';
+
+// Helper function to get all mesh IDs from the hierarchy
+const getAllMeshIdsFromHierarchy = (nodes: ModelNode[]): string[] => {
+  let ids: string[] = [];
+  for (const node of nodes) {
+    if (node.type === 'Mesh' || node.type === 'InstancedMesh' || node.type === 'AbstractMesh') {
+      ids.push(node.id);
+    }
+    if (node.children && node.children.length > 0) {
+      ids = ids.concat(getAllMeshIdsFromHierarchy(node.children));
+    }
+  }
+  return ids;
+};
+
 
 export default function Home() {
   const [submittedModelUrl, setSubmittedModelUrl] = useState<string | null>(null);
@@ -51,6 +67,7 @@ export default function Home() {
   const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>('light');
   const [isGridVisible, setIsGridVisible] = useState<boolean>(true);
   const [isAutoRotating, setIsAutoRotating] = useState<boolean>(false);
+  const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
 
   // Animation state
   const [hasAnimations, setHasAnimations] = useState<boolean>(false);
@@ -61,6 +78,20 @@ export default function Home() {
   
   const [requestPlayAnimation, setRequestPlayAnimation] = useState<boolean | undefined>(undefined);
   const [requestAnimationSeek, setRequestAnimationSeek] = useState<number | undefined>(undefined);
+
+  // Screenshot state
+  const [requestScreenshot, setRequestScreenshot] = useState<boolean>(false);
+
+  // Focus state
+  const [requestFocusObject, setRequestFocusObject] = useState<boolean>(false);
+
+  // Mesh visibility state
+  const [hiddenMeshIds, setHiddenMeshIds] = useState<Set<string>>(new Set());
+  const [isSoloActive, setIsSoloActive] = useState<boolean>(false);
+
+  // Drag and drop state
+  const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
+  const acceptedFileTypes = ".glb,.gltf,.obj";
 
 
   useEffect(() => {
@@ -117,58 +148,97 @@ export default function Home() {
     }
   }, [theme]); 
 
+  const processFile = useCallback((file: File) => {
+    if (!file) return;
+
+    setSelectedFileName(file.name);
+    setModelName(file.name);
+
+    const nameParts = file.name.split('.');
+    const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
+    setModelFileExtension(ext);
+
+    setError(null);
+    setIsLoading(true);
+    setSubmittedModelUrl(null);
+    setModelHierarchy([]);
+    setMaterialDetails([]);
+    setHiddenMeshIds(new Set());
+    setIsSoloActive(false);
+    setHasAnimations(false);
+    setIsPlayingAnimation(false);
+    setAnimationProgress(0);
+    setAnimationDurationSeconds(0);
+    setAnimationCurrentTimeSeconds(0);
+    setRequestPlayAnimation(undefined);
+    setRequestAnimationSeek(undefined);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setSubmittedModelUrl(e.target.result as string);
+      } else {
+        setError("Failed to read file.");
+        setIsLoading(false);
+        toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
+      }
+    };
+    reader.onerror = () => {
+      setError("Error reading file.");
+      setIsLoading(false);
+      toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
+    };
+    reader.readAsDataURL(file);
+  }, [toast]);
+
 
   const handleFileSelected = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFileName(file.name);
-      setModelName(file.name); 
-
-      const nameParts = file.name.split('.');
-      const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
-      setModelFileExtension(ext);
-
-      setError(null);
-      setIsLoading(true);
-      setSubmittedModelUrl(null); 
-      setModelHierarchy([]); 
-      setMaterialDetails([]);
-      // Reset animation states
-      setHasAnimations(false);
-      setIsPlayingAnimation(false);
-      setAnimationProgress(0);
-      setAnimationDurationSeconds(0);
-      setAnimationCurrentTimeSeconds(0);
-      setRequestPlayAnimation(undefined);
-      setRequestAnimationSeek(undefined);
-
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          setSubmittedModelUrl(e.target.result as string);
-        } else {
-          setError("Failed to read file.");
-          setIsLoading(false);
-          toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
-        }
-      };
-      reader.onerror = () => {
-        setError("Error reading file.");
-        setIsLoading(false);
-        toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setSelectedFileName(null);
-      setSubmittedModelUrl(null);
-      setModelFileExtension(null);
-      setModelName(null);
-      setModelHierarchy([]);
-      setMaterialDetails([]);
-      setHasAnimations(false);
+    if (!file) {
+      if (event.target) {
+        event.target.value = ""; // Reset input if no file selected (e.g., user cancels)
+      }
+      return;
     }
-  }, [toast]);
+    processFile(file);
+    if (event.target) {
+      event.target.value = ""; // Reset input after processing to allow re-selection of the same file
+    }
+  }, [processFile]);
+
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(false);
+
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      const file = event.dataTransfer.files[0];
+      const fileType = `.${file.name.split('.').pop()?.toLowerCase()}`;
+      if (acceptedFileTypes.split(',').includes(fileType)) {
+        processFile(file);
+      } else {
+        toast({
+          title: "Invalid File Type",
+          description: `Please upload a supported file type: ${acceptedFileTypes}`,
+          variant: "destructive",
+        });
+      }
+      event.dataTransfer.clearData();
+    }
+  }, [processFile, toast, acceptedFileTypes]);
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(false);
+  }, []);
+
 
   const handleModelLoaded = useCallback((success: boolean, errorMessage?: string) => {
     setIsLoading(false);
@@ -177,6 +247,8 @@ export default function Home() {
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (e.g., .glb, .gltf, .obj).", variant: "destructive" });
       setModelHierarchy([]);
       setMaterialDetails([]);
+      setHiddenMeshIds(new Set());
+      setIsSoloActive(false);
       setHasAnimations(false);
     } else {
       setError(null); 
@@ -190,7 +262,7 @@ export default function Home() {
   const handleModelHierarchyReady = useCallback((hierarchy: ModelNode[]) => {
     setModelHierarchy(hierarchy);
   }, []);
-
+  
   const handleMaterialsReady = useCallback((materials: MaterialDetail[]) => {
     setMaterialDetails(materials);
   }, []);
@@ -246,22 +318,124 @@ export default function Home() {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  const toggleExplorerPanel = useCallback(() => {
+    setIsExplorerCollapsed(prev => !prev);
+  }, []);
+
+  const handleScreenshotTaken = useCallback((dataUrl: string) => {
+    const link = document.createElement('a');
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+    link.download = `Open3D_Capture_${timestamp}.png`;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setRequestScreenshot(false); // Reset the trigger
+    toast({ title: "Screenshot Captured", description: "Image downloaded successfully." });
+  }, [toast]);
+
+  const handleObjectFocused = useCallback(() => {
+    setRequestFocusObject(false);
+  }, []);
+
+  const handleToggleMeshVisibility = useCallback((meshId: string, ctrlPressed: boolean) => {
+    if (ctrlPressed) {
+      if (isSoloActive) {
+        setHiddenMeshIds(new Set());
+        setIsSoloActive(false);
+      } else {
+        const allIdsInScene = getAllMeshIdsFromHierarchy(modelHierarchy);
+        const newHiddenIds = new Set<string>();
+        for (const id of allIdsInScene) {
+          if (id !== meshId) {
+            newHiddenIds.add(id);
+          }
+        }
+        setHiddenMeshIds(newHiddenIds);
+        setIsSoloActive(true);
+      }
+    } else {
+      setIsSoloActive(false);
+      setHiddenMeshIds(prevIds => {
+        const newIds = new Set(prevIds);
+        if (newIds.has(meshId)) {
+          newIds.delete(meshId);
+        } else {
+          newIds.add(meshId);
+        }
+        return newIds;
+      });
+    }
+  }, [modelHierarchy, isSoloActive]);
+
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+    }
+    
+    if (event.altKey && event.key.toLowerCase() === 'g') {
+      event.preventDefault();
+      setIsGridVisible(prev => !prev);
+    } else if (event.ctrlKey && event.key.toLowerCase() === 'n') {
+      event.preventDefault();
+      triggerFileDialog();
+    } else if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'f') {
+      event.preventDefault();
+      if (submittedModelUrl && !isLoading && !error) {
+        setRequestFocusObject(true);
+      }
+    } else if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'e') {
+      event.preventDefault();
+      toggleExplorerPanel();
+    } else if (!event.ctrlKey && !event.altKey && !event.metaKey) { 
+        switch (event.key) {
+            case '1':
+                event.preventDefault();
+                setRenderingMode('shaded');
+                break;
+            case '2':
+                event.preventDefault();
+                setRenderingMode('non-shaded');
+                break;
+            case '3':
+                event.preventDefault();
+                setRenderingMode('wireframe');
+                break;
+            default:
+                break;
+        }
+    }
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, toggleExplorerPanel, modelHierarchy, isSoloActive]); 
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]); 
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* Top Bar */}
       <header className="h-12 flex-shrink-0 border-b border-border bg-card/70 backdrop-blur-md flex items-center px-4 justify-between shadow-md">
-        <h1 className="text-lg font-semibold text-primary">3D Viewer</h1>
+        <h1 className="text-lg font-semibold text-primary">Open3D Viewer</h1>
         <div className="text-sm text-muted-foreground">{modelName || "No model loaded"}</div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="text-muted-foreground hover:text-accent-foreground h-8 w-8"
+            onClick={triggerFileDialog}
+            title="Open new file (Ctrl+N)"
+          >
             <FileText className="h-4 w-4" />
-            <span className="sr-only">Documentation</span>
+            <span className="sr-only">Open File</span>
           </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Settings">
                 <Settings className="h-4 w-4" />
                 <span className="sr-only">Settings</span>
               </Button>
@@ -316,112 +490,156 @@ export default function Home() {
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
-            <InfoIcon className="h-4 w-4" />
-            <span className="sr-only">Info</span>
-          </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Info">
+                    <InfoIcon className="h-4 w-4" />
+                    <span className="sr-only">Info</span>
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="mr-2 w-56">
+                <DropdownMenuLabel className="text-xs font-semibold">About</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                    <a href="https://github.com/Samscape0" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full text-sm">
+                        <GithubIcon className="h-3.5 w-3.5" /> Samscape0
+                    </a>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
       <div className="flex flex-row flex-grow overflow-hidden">
         {/* Left Panel ("Model Explorer") */}
-        <aside className="w-72 bg-card/70 backdrop-blur-md border-r border-border flex flex-col p-0 shadow-lg">
-          <div className="p-3 border-b border-border flex items-center justify-between h-12">
-            <h2 className="text-sm font-semibold text-primary">Model Explorer</h2>
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-7 w-7">
-              <SlidersHorizontal className="h-4 w-4" />
-              <span className="sr-only">Toggle controls</span>
+        <aside
+          className={`bg-card/70 backdrop-blur-md border-r border-border flex flex-col shadow-lg transition-all duration-300 ease-in-out
+            ${isExplorerCollapsed ? 'w-16' : 'w-72'}`}
+        >
+          <div
+            className={`flex items-center h-12 border-b border-border
+              ${isExplorerCollapsed ? 'justify-center px-2' : 'justify-between px-3'}`}
+          >
+            {!isExplorerCollapsed && (
+              <h2 className="text-sm font-semibold text-primary">Model Explorer</h2>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleExplorerPanel}
+              className="text-muted-foreground hover:text-accent-foreground h-7 w-7"
+              title="Toggle Model Explorer (E)"
+            >
+              {isExplorerCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              <span className="sr-only">Toggle Model Explorer</span>
             </Button>
           </div>
-          <Tabs defaultValue="info" className="w-full flex flex-col flex-grow p-3">
-            <TabsList className="grid w-full grid-cols-3 h-9">
-              <TabsTrigger value="info" className="text-xs h-7">Info</TabsTrigger>
-              <TabsTrigger value="scene" className="text-xs h-7">Scene</TabsTrigger>
-              <TabsTrigger value="materials" className="text-xs h-7">Materials</TabsTrigger>
-            </TabsList>
-            <TabsContent value="info" className="flex-grow mt-3 overflow-y-auto">
-              {!submittedModelUrl && !isLoading && !error ? (
-                <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                  <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium text-foreground">No model loaded</p>
-                  <p className="text-xs text-muted-foreground">Open a 3D model to view its information.</p>
-                </div>
-              ) : modelName && !error ? (
-                 <div className="p-2 space-y-1">
-                    <p className="text-sm font-semibold text-foreground">Filename: <span className="font-normal text-muted-foreground">{modelName && (modelName.lastIndexOf('.') > 0 ? modelName.substring(0, modelName.lastIndexOf('.')) : modelName)}</span></p>
-                    <p className="text-sm font-semibold text-foreground">File Path: <span className="font-normal text-muted-foreground break-all">{selectedFileName}</span></p>
-                    {modelFileExtension && <p className="text-sm font-semibold text-foreground">File Format: <span className="font-normal text-muted-foreground">{modelFileExtension.toUpperCase()}</span></p>}
-                 </div>
-              ) : null }
-            </TabsContent>
-            <TabsContent value="scene" className="flex-grow mt-3 overflow-y-auto">
-               {modelHierarchy.length > 0 ? (
-                <ul className="space-y-0.5">
-                  {modelHierarchy.map(node => (
-                    <ModelHierarchyView key={node.id} node={node} defaultOpen={true} />
-                  ))}
-                </ul>
-              ) : submittedModelUrl && !isLoading && !error ? (
-                 <p className="text-sm text-muted-foreground italic p-2">Model loaded, but no hierarchy data to display or model is empty.</p>
-              ) : !isLoading && !error && (
-                <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                  <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium text-foreground">No model loaded</p>
-                  <p className="text-xs text-muted-foreground">The scene hierarchy will appear here.</p>
-                </div>
-              )}
-            </TabsContent>
-            <TabsContent value="materials" className="flex-grow mt-3 overflow-y-auto">
-              {!submittedModelUrl && !isLoading && !error ? (
-                <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                  <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium text-foreground">No model loaded</p>
-                  <p className="text-xs text-muted-foreground">Open a 3D model to view its materials.</p>
-                </div>
-              ) : isLoading ? (
-                <p className="text-sm text-muted-foreground italic p-2">Loading materials...</p>
-              ) : error ? (
-                <p className="text-sm text-destructive italic p-2">Error loading model, materials unavailable.</p>
-              ) : materialDetails.length > 0 ? (
-                <ScrollArea className="h-full">
-                  <div className="space-y-2 p-1">
-                    {materialDetails.map((mat) => (
-                      <div key={mat.id} className="rounded-md border border-border bg-card p-2 text-sm shadow-sm">
-                        <p className="font-semibold text-foreground truncate" title={mat.name}>{mat.name}</p>
-                        <p className="text-xs text-muted-foreground">Type: {mat.type}</p>
-                      </div>
-                    ))}
+          
+          {!isExplorerCollapsed && (
+            <Tabs defaultValue="info" className="w-full flex flex-col flex-grow p-3">
+              <TabsList className="grid w-full grid-cols-3 h-9">
+                <TabsTrigger value="info" className="text-xs h-7">Info</TabsTrigger>
+                <TabsTrigger value="scene" className="text-xs h-7">Scene</TabsTrigger>
+                <TabsTrigger value="materials" className="text-xs h-7">Materials</TabsTrigger>
+              </TabsList>
+              <TabsContent value="info" className="flex-grow mt-3 overflow-y-auto">
+                {!submittedModelUrl && !isLoading && !error ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
+                    <p className="text-sm font-medium text-foreground">No model loaded</p>
+                    <p className="text-xs text-muted-foreground">Open a 3D model to view its information.</p>
                   </div>
-                </ScrollArea>
-              ) : (
-                <p className="text-sm text-muted-foreground italic p-2">No materials found in this model.</p>
-              )}
-            </TabsContent>
-          </Tabs>
+                ) : modelName && !error ? (
+                  <div className="p-2 space-y-1">
+                      <p className="text-sm font-semibold text-foreground">Filename: <span className="font-normal text-muted-foreground">{modelName && (modelName.lastIndexOf('.') > 0 ? modelName.substring(0, modelName.lastIndexOf('.')) : modelName)}</span></p>
+                      <p className="text-sm font-semibold text-foreground">File Path: <span className="font-normal text-muted-foreground break-all">{selectedFileName}</span></p>
+                      {modelFileExtension && <p className="text-sm font-semibold text-foreground">File Format: <span className="font-normal text-muted-foreground">{modelFileExtension.toUpperCase()}</span></p>}
+                  </div>
+                ) : null }
+              </TabsContent>
+              <TabsContent value="scene" className="flex-grow mt-3 overflow-y-auto">
+                {modelHierarchy.length > 0 ? (
+                  <ScrollArea className="h-full">
+                    <ul className="space-y-0.5">
+                      {modelHierarchy.map(node => (
+                        <ModelHierarchyView 
+                          key={node.id} 
+                          node={node} 
+                          defaultOpen={true} 
+                          hiddenMeshIds={hiddenMeshIds}
+                          onToggleVisibility={handleToggleMeshVisibility}
+                        />
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                ) : submittedModelUrl && !isLoading && !error ? (
+                  <p className="text-sm text-muted-foreground italic p-2">Model loaded, but no hierarchy data to display or model is empty.</p>
+                ) : !isLoading && !error && (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
+                    <p className="text-sm font-medium text-foreground">No model loaded</p>
+                    <p className="text-xs text-muted-foreground">The scene hierarchy will appear here.</p>
+                  </div>
+                )}
+              </TabsContent>
+              <TabsContent value="materials" className="flex-grow mt-3 overflow-y-auto">
+                {!submittedModelUrl && !isLoading && !error ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                    <PackageIcon className="w-12 h-12 text-muted-foreground mb-3" />
+                    <p className="text-sm font-medium text-foreground">No model loaded</p>
+                    <p className="text-xs text-muted-foreground">Open a 3D model to view its materials.</p>
+                  </div>
+                ) : isLoading ? (
+                  <p className="text-sm text-muted-foreground italic p-2">Loading materials...</p>
+                ) : error ? (
+                  <p className="text-sm text-destructive italic p-2">Error loading model, materials unavailable.</p>
+                ) : materialDetails.length > 0 ? (
+                  <ScrollArea className="h-full">
+                    <div className="space-y-2 p-1">
+                      {materialDetails.map((mat) => (
+                        <div key={mat.id} className="rounded-md border border-border bg-card p-2 text-sm shadow-sm">
+                          <p className="font-semibold text-foreground truncate" title={mat.name}>{mat.name}</p>
+                          <p className="text-xs text-muted-foreground">Type: {mat.type}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic p-2">No materials found in this model.</p>
+                )}
+              </TabsContent>
+            </Tabs>
+          )}
         </aside>
 
         {/* Right Panel (Viewport / Upload Prompt) */}
-        <main className="flex-grow relative h-full bg-background">
+        <main 
+            className="flex-grow relative h-full bg-background"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
             <Input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelected}
                 className="hidden"
-                accept=".glb,.gltf,.obj"
+                accept={acceptedFileTypes}
                 aria-label="3D Model File"
             />
             {!submittedModelUrl && !isLoading && !error && (
                 <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
                     <div
-                        className="flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer backdrop-blur-md"
+                        className={`flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer backdrop-blur-md transition-all
+                                    ${isDraggingOver ? 'border-accent ring-2 ring-accent ring-offset-2' : 'border-border'}`}
                         onClick={triggerFileDialog}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") triggerFileDialog();}}
                     >
-                        <div className="flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4">
-                            <UploadCloud className="h-10 w-10 text-primary" />
+                        <div className={`flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4 transition-colors ${isDraggingOver ? 'bg-accent/20' : ''}`}>
+                            <UploadCloud className={`h-10 w-10 text-primary transition-colors ${isDraggingOver ? 'text-accent' : ''}`} />
                         </div>
                         <p className="text-lg font-medium text-foreground mb-1">Drag & Drop or Click to Upload</p>
                         <p className="text-xs text-muted-foreground">
@@ -454,30 +672,81 @@ export default function Home() {
                   onAnimationsAvailable={handleAnimationsAvailable}
                   onAnimationStateChange={handleAnimationStateChange}
                   onAnimationProgressUpdate={handleAnimationProgressUpdate}
+                  requestScreenshot={requestScreenshot}
+                  onScreenshotTaken={handleScreenshotTaken}
+                  requestFocusObject={requestFocusObject}
+                  onObjectFocused={handleObjectFocused}
+                  hiddenMeshIds={hiddenMeshIds}
               />
             )}
             
             {submittedModelUrl && !isLoading && !error && (
-              <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-                <Button
-                  variant={isGridVisible ? "secondary" : "outline"}
-                  size="icon"
-                  onClick={() => setIsGridVisible(!isGridVisible)}
-                  title={isGridVisible ? "Hide Grid" : "Show Grid"}
-                  className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                >
-                  <Grid className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={isAutoRotating ? "secondary" : "outline"}
-                  size="icon"
-                  onClick={() => setIsAutoRotating(!isAutoRotating)}
-                  title={isAutoRotating ? "Stop Auto-Rotation" : "Start Auto-Rotation"}
-                  className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                >
-                  <RotateCw className="h-4 w-4" />
-                </Button>
-              </div>
+              <>
+                <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+                  <Button
+                    variant={isGridVisible ? "secondary" : "outline"}
+                    size="icon"
+                    onClick={() => setIsGridVisible(!isGridVisible)}
+                    title="Toggle Grid (Alt+G)"
+                    className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                  >
+                    <Grid className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={isAutoRotating ? "secondary" : "outline"}
+                    size="icon"
+                    onClick={() => setIsAutoRotating(!isAutoRotating)}
+                    title={isAutoRotating ? "Stop Auto-Rotation" : "Start Auto-Rotation"}
+                    className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setRequestScreenshot(true)}
+                    title="Capture Screenshot"
+                    className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setRequestFocusObject(true)}
+                    title="Focus on Object (F)"
+                    className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
+                  >
+                    <Focus className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                 <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-4 right-4 z-10 h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80 text-muted-foreground hover:text-accent-foreground"
+                      title="Show Shortcuts"
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                      <span className="sr-only">Show Shortcuts</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="mr-4 w-auto text-xs p-3 bg-gradient-to-l from-transparent via-card/10 to-card/30 backdrop-blur-lg shadow-lg border-none">
+                    <h3 className="font-semibold text-sm text-foreground mb-1">ShortKeys</h3>
+                    <ul className="space-y-0.5 text-muted-foreground">
+                        <li>Toggle Grid: <kbd>Alt</kbd> + <kbd>G</kbd></li>
+                        <li>Open File: <kbd>Ctrl</kbd> + <kbd>N</kbd></li>
+                        <li>Focus Model: <kbd>F</kbd></li>
+                        <li>Toggle Explorer: <kbd>E</kbd></li>
+                        <li>Shaded View: <kbd>1</kbd></li>
+                        <li>Non-Shaded View: <kbd>2</kbd></li>
+                        <li>Wireframe View: <kbd>3</kbd></li>
+                    </ul>
+                  </PopoverContent>
+                </Popover>
+              </>
             )}
 
 
@@ -520,6 +789,7 @@ export default function Home() {
                       size="sm"
                       onClick={() => setRenderingMode('shaded')}
                       className="text-xs h-7 px-2"
+                      title="Shaded (1)"
                     >
                       Shaded
                     </Button>
@@ -528,6 +798,7 @@ export default function Home() {
                       size="sm"
                       onClick={() => setRenderingMode('non-shaded')}
                       className="text-xs h-7 px-2"
+                       title="Non-Shaded (2)"
                     >
                       Non-Shaded
                     </Button>
@@ -536,6 +807,7 @@ export default function Home() {
                       size="sm"
                       onClick={() => setRenderingMode('wireframe')}
                       className="text-xs h-7 px-2"
+                      title="Wireframe (3)"
                     >
                       Wireframe
                     </Button>
@@ -554,6 +826,7 @@ export default function Home() {
                         size="icon"
                         onClick={handlePlayPauseToggle}
                         className="h-7 w-7 text-foreground"
+                        title={isPlayingAnimation ? "Pause Animation" : "Play Animation"}
                       >
                         {isPlayingAnimation ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                       </Button>
@@ -577,13 +850,6 @@ export default function Home() {
             )}
         </main>
       </div>
-
-      {/* Bottom Bar */}
-      <footer className="h-8 flex-shrink-0 border-t border-border bg-card/70 backdrop-blur-md flex items-center px-4 shadow-md">
-        <p className="text-xs text-muted-foreground">
-            {isLoading ? "Loading model..." : error ? "Error loading model" : submittedModelUrl ? `Viewing: ${modelName}` : "Ready to load model"}
-        </p>
-      </footer>
     </div>
   );
 }
