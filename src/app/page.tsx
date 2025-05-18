@@ -86,6 +86,7 @@ export default function Home() {
 
   // Mesh visibility state
   const [hiddenMeshIds, setHiddenMeshIds] = useState<Set<string>>(new Set());
+  const [isSoloActive, setIsSoloActive] = useState<boolean>(false);
 
 
   useEffect(() => {
@@ -164,7 +165,8 @@ export default function Home() {
     setSubmittedModelUrl(null); 
     setModelHierarchy([]); 
     setMaterialDetails([]);
-    setHiddenMeshIds(new Set()); // Reset hidden meshes for new model
+    setHiddenMeshIds(new Set()); 
+    setIsSoloActive(false); // Reset solo state
     // Reset animation states
     setHasAnimations(false);
     setIsPlayingAnimation(false);
@@ -206,6 +208,7 @@ export default function Home() {
       setModelHierarchy([]);
       setMaterialDetails([]);
       setHiddenMeshIds(new Set());
+      setIsSoloActive(false);
       setHasAnimations(false);
     } else {
       setError(null); 
@@ -298,15 +301,25 @@ export default function Home() {
 
   const handleToggleMeshVisibility = useCallback((meshId: string, ctrlPressed: boolean) => {
     if (ctrlPressed) {
-      const allIdsInScene = getAllMeshIdsFromHierarchy(modelHierarchy);
-      const newHiddenIds = new Set<string>();
-      for (const id of allIdsInScene) {
-        if (id !== meshId) {
-          newHiddenIds.add(id);
+      if (isSoloActive) {
+        // If solo is active, Ctrl+Click again unhides all
+        setHiddenMeshIds(new Set());
+        setIsSoloActive(false);
+      } else {
+        // If solo is not active, Ctrl+Click solos the selected mesh
+        const allIdsInScene = getAllMeshIdsFromHierarchy(modelHierarchy);
+        const newHiddenIds = new Set<string>();
+        for (const id of allIdsInScene) {
+          if (id !== meshId) {
+            newHiddenIds.add(id);
+          }
         }
+        setHiddenMeshIds(newHiddenIds);
+        setIsSoloActive(true);
       }
-      setHiddenMeshIds(newHiddenIds);
     } else {
+      // Normal click toggles visibility and deactivates solo mode
+      setIsSoloActive(false);
       setHiddenMeshIds(prevIds => {
         const newIds = new Set(prevIds);
         if (newIds.has(meshId)) {
@@ -317,7 +330,7 @@ export default function Home() {
         return newIds;
       });
     }
-  }, [modelHierarchy]);
+  }, [modelHierarchy, isSoloActive]);
 
 
   return (

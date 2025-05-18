@@ -10,7 +10,7 @@ interface HierarchyNodeViewProps {
   node: ModelNode;
   defaultOpen?: boolean;
   hiddenMeshIds: Set<string>;
-  onToggleVisibility: (meshId: string, ctrlPressed: boolean) => void; // Updated signature
+  onToggleVisibility: (meshId: string, ctrlPressed: boolean) => void;
   level?: number;
 }
 
@@ -30,7 +30,7 @@ export const ModelHierarchyView: React.FC<HierarchyNodeViewProps> = ({ node, def
 
   const handleVisibilityClick = (event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent accordion from toggling
-    onToggleVisibility(node.id, event.ctrlKey); // Pass event.ctrlKey
+    onToggleVisibility(node.id, event.ctrlKey); 
   };
 
   const isMesh = node.type === 'Mesh' || node.type === 'InstancedMesh' || node.type === 'AbstractMesh';
@@ -54,7 +54,7 @@ export const ModelHierarchyView: React.FC<HierarchyNodeViewProps> = ({ node, def
             size="icon"
             className="h-5 w-5 mr-1 p-0 data-[visibility-toggle]"
             onClick={handleVisibilityClick}
-            title={isCurrentlyVisible ? "Hide Mesh (Ctrl+Click to Solo)" : "Show Mesh (Ctrl+Click to Solo)"}
+            title="Toggle visibility. Ctrl+Click to isolate. If isolated, Ctrl+Click again to show all."
           >
             {isCurrentlyVisible ? <Eye className="h-3.5 w-3.5 text-accent-foreground" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
           </Button>
