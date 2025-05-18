@@ -213,7 +213,7 @@ export default function Home() {
       setHasAnimations(false);
     } else {
       setError(null); 
-      toast({ title: "Model Loaded", description: "Model loaded successfully." });
+      // toast({ title: "Model Loaded", description: "Model loaded successfully." }); // Removed this line
     }
   }, [toast]);
 
@@ -368,7 +368,7 @@ export default function Home() {
                 break;
         }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, toggleExplorerPanel]); 
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, toggleExplorerPanel, modelHierarchy, isSoloActive]); // Added modelHierarchy and isSoloActive
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -643,7 +643,7 @@ export default function Home() {
                     variant={isGridVisible ? "secondary" : "outline"}
                     size="icon"
                     onClick={() => setIsGridVisible(!isGridVisible)}
-                    title={isGridVisible ? "Hide Grid (Alt+G)" : "Show Grid (Alt+G)"}
+                    title="Hide Grid (Alt+G)"
                     className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
                   >
                     <Grid className="h-4 w-4" />
@@ -689,7 +689,7 @@ export default function Home() {
                       <span className="sr-only">Show Shortcuts</span>
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="mr-4 w-auto text-xs p-3">
+                  <PopoverContent className="mr-4 w-auto text-xs p-3 bg-gradient-to-l from-card/30 via-card/10 to-transparent backdrop-blur-lg shadow-lg border-none">
                     <h3 className="font-semibold text-sm text-foreground mb-1">ShortKeys</h3>
                     <ul className="space-y-0.5 text-muted-foreground">
                         <li>Toggle Grid: <kbd>Alt</kbd> + <kbd>G</kbd></li>
@@ -806,16 +806,6 @@ export default function Home() {
             )}
         </main>
       </div>
-
-      {/* Bottom Bar */}
-      <footer className="h-8 flex-shrink-0 border-t border-border bg-card/70 backdrop-blur-md flex items-center justify-start px-4 shadow-md">
-        <p className="text-xs text-muted-foreground">
-            Version: 0.2.0
-        </p>
-      </footer>
     </div>
   );
 }
-
-
-    
