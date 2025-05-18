@@ -39,7 +39,7 @@ type EffectiveTheme = 'light' | 'dark';
 interface BabylonViewerProps {
   modelUrl: string | null;
   modelFileExtension: string | null;
-  processedFiles?: File[] | null; // For multi-file OBJ
+  // processedFiles?: File[] | null; // For multi-file OBJ - removed as per user request
   onModelLoaded: (success: boolean, error?: string) => void;
   onCameraReady: (camera: ArcRotateCamera) => void;
   onFpsUpdate?: (fps: number) => void;
@@ -71,7 +71,7 @@ const isHelperNodeByName = (nodeName: string): boolean => {
 export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   modelUrl,
   modelFileExtension,
-  processedFiles,
+  // processedFiles, // For multi-file OBJ - removed as per user request
   onModelLoaded,
   onCameraReady,
   onFpsUpdate,
@@ -128,20 +128,29 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     }
 
     scene.createDefaultEnvironment({ 
-        createSkybox: false, // No visual skybox, clearColor will be the background
-        createGround: false, // No default ground, we use our custom grid
+        createSkybox: false, 
+        createGround: false, 
         skyboxSize: 150, 
         enableGroundShadow: false, 
     });
     scene.environmentIntensity = 1.0;
     
     // Clear color is handled by a separate useEffect based on effectiveTheme
+    // but we set it here too to ensure it's applied during reset.
+    if (sceneRef.current) {
+        if (effectiveTheme === 'light') {
+            sceneRef.current.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1); 
+        } else { 
+            sceneRef.current.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);   
+        }
+    }
+
 
     const groundMesh = scene.getMeshByName("grid");
     if(groundMesh) {
       groundMesh.position.y = 0; 
     }
-  }, [sceneRef]);
+  }, [sceneRef, effectiveTheme]);
 
 
   const applyRenderingModeStyle = useCallback((
@@ -150,22 +159,21 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     currentModelFileExtension: string | null
   ) => {
     if (!assetContainer || !sceneRef.current ) return;
-    // Removed check for '.obj' as per user request to try and make it work
     
     const processSingleMaterial = (mat: Material) => {
-        // Reset to defaults for 'shaded' mode
+        // Reset to defaults for 'shaded' mode first
         mat.wireframe = false;
-        mat.alpha = 1.0; // Ensure opaque unless transparency is handled elsewhere
+        // DO NOT set mat.alpha = 1.0 here as it overrides transparency
 
         if (mat instanceof PBRMaterial) {
             mat.unlit = false;
         } else if (mat instanceof StandardMaterial) {
             mat.disableLighting = false;
-            // Restore default emissive/ambient if they were changed
             mat.emissiveColor = mat.emissiveColor ? mat.emissiveColor.copyFrom(Color3.Black()) : new Color3(0,0,0);
             mat.ambientColor = mat.ambientColor ? mat.ambientColor.copyFrom(Color3.Black()) : new Color3(0,0,0);
         }
 
+        // Apply selected mode
         switch (newRenderingMode) {
             case 'shaded':
                 // Defaults applied above are for shaded
@@ -175,8 +183,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     mat.unlit = true;
                 } else if (mat instanceof StandardMaterial) {
                     mat.disableLighting = true;
-                    mat.emissiveColor = Color3.Black();
-                    mat.ambientColor = Color3.Black();
+                    mat.emissiveColor = Color3.Black(); 
+                    mat.ambientColor = Color3.Black();  
                 }
                 break;
             case 'wireframe':
@@ -185,8 +193,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     mat.unlit = true; 
                 } else if (mat instanceof StandardMaterial) {
                     mat.disableLighting = true;
-                    mat.emissiveColor = Color3.Black();
-                    mat.ambientColor = Color3.Black();
+                    mat.emissiveColor = Color3.Black(); 
+                    mat.ambientColor = Color3.Black();  
                 }
                 break;
         }
@@ -206,7 +214,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             processSingleMaterial(mesh.material);
         }
     });
-  }, []);
+  }, []); // sceneRef removed as it's stable via main component scope access.
 
 
   // Effect for initial engine, scene, camera, lights, grid setup
@@ -244,7 +252,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     ground.isPickable = false;
     ground.position.y = 0;
     
-    // Initial environment setup without skybox, for IBL
     scene.createDefaultEnvironment({ 
       createSkybox: false, 
       createGround: false,  
@@ -302,7 +309,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       cameraRef.current = null;
       setIsCurrentModelActuallyLoaded(false);
     };
-  }, [onCameraReady, onFpsUpdate]); // Minimal dependencies for main setup
+  }, [onCameraReady, onFpsUpdate]);
 
 
   // Effect for scene.onBeforeRenderObservable (auto-rotate, animation progress)
@@ -357,7 +364,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             animationProgressObserverRef.current = null;
         }
     };
-  }, [isAutoRotating, onAnimationProgressUpdate, onAnimationStateChange, isCurrentModelActuallyLoaded, sceneRef]);
+  }, [isAutoRotating, isCurrentModelActuallyLoaded, onAnimationProgressUpdate, onAnimationStateChange, sceneRef]);
 
 
   useEffect(() => {
@@ -406,12 +413,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     if (!modelUrl) {
         internalResetCameraAndEnvironment(); 
-        // Ensure clearColor is set after reset based on current theme
-        if (effectiveTheme === 'light') {
-            scene.clearColor = new Color4(240/255, 240/255, 240/255, 1);
-        } else {
-            scene.clearColor = new Color4(38/255, 38/255, 38/255, 1);
-        }
         return;
     }
 
@@ -420,30 +421,14 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     let currentFileForLoader = modelUrl;
     
     let loadPromise: Promise<AssetContainer>;
-
-    if (modelFileExtension === '.obj' && processedFiles && processedFiles.length > 0) {
-        // Clear previous FilesInput state
-        for (const key in FilesInput.FilesToLoad) {
-            delete FilesInput.FilesToLoad[key];
-        }
-
-        processedFiles.forEach(file => {
-            FilesInput.FilesToLoad[file.name.toLowerCase()] = file;
-        });
-        const objFile = processedFiles.find(f => f.name.toLowerCase().endsWith('.obj'));
-        if (!objFile) {
-            onModelLoaded(false, "No .obj file found in the selection.");
-            return;
-        }
-        currentFileForLoader = "file:" + objFile.name; // OBJLoader uses "file:" prefix for FilesInput
-        rootUrl = "file:"; // OBJLoader needs this for FilesInput relative paths
-        
-        loadPromise = SceneLoader.LoadAssetContainerAsync(rootUrl, objFile.name, scene, undefined, ".obj");
-
-    } else {
+    
+    // This multi-file OBJ logic was removed as per user request.
+    // if (modelFileExtension === '.obj' && processedFiles && processedFiles.length > 0) {
+    //     // ...
+    // } else {
          const pluginExtension = modelFileExtension || undefined;
          loadPromise = SceneLoader.LoadAssetContainerAsync(rootUrl, currentFileForLoader, scene, undefined, pluginExtension);
-    }
+    // }
     
     loadPromise
       .then(container => {
@@ -490,11 +475,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     });
                     scene.environmentIntensity = 1.0;
                    
-                    // Ensure clearColor is set after environment setup based on current theme
-                    if (effectiveTheme === 'light') {
-                        scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
-                    } else {
-                        scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
+                    if (sceneRef.current) {
+                        if (effectiveTheme === 'light') {
+                            sceneRef.current.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1); 
+                        } else { 
+                            sceneRef.current.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);   
+                        }
                     }
                 } else { 
                     internalResetCameraAndEnvironment();
@@ -506,16 +492,18 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             internalResetCameraAndEnvironment();
         }
         
+        // Setup materials (backface culling, transparency)
         if (loadedAssetContainerRef.current) {
           loadedAssetContainerRef.current.materials.forEach(mat => {
-            mat.backFaceCulling = false;
+            mat.backFaceCulling = false; // Apply to all materials
             if (mat instanceof PBRMaterial) {
               const pbrMat = mat as PBRMaterial;
               if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
                   pbrMat.useAlphaFromAlbedoTexture = true;
-                  // Trust loader for transparencyMode unless it's OPAQUE and texture has alpha
+                  // If GLTF loader set it to OPAQUE but texture has alpha,
+                  // and it's not MASK, then force BLEND.
                   if (pbrMat.transparencyMode === PBRMaterial.PBRMATERIAL_OPAQUE) {
-                     // pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND; // Re-evaluate if this is needed
+                     pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
                   }
               }
             } else if (mat instanceof StandardMaterial) {
@@ -526,7 +514,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
               }
             }
           });
-          applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current, modelFileExtension); 
+          // Apply initial rendering mode style
+          applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current, modelFileExtension);
         }
         
         onModelLoaded(true);
@@ -616,13 +605,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         } else if (typeof error === 'string') {
             userMessage = error;
         }
-         if (modelFileExtension && ['.obj'].includes(modelFileExtension) && isDataUrl) {
-             userMessage += ` For ${modelFileExtension.toUpperCase()} files, materials and textures might not load correctly from a single Data URL if they rely on external .mtl or texture files not embedded. Please select all associated files.`;
-        } else if (modelFileExtension && ['.obj'].includes(modelFileExtension) && processedFiles && processedFiles.length > 0 && !processedFiles.find(f => f.name.toLowerCase().endsWith('.mtl'))) {
-            userMessage += ` An .obj file was loaded, but no associated .mtl file was found in the selection. Materials may not appear as intended.`;
-        }
-
-
         onModelLoaded(false, userMessage);
         setIsCurrentModelActuallyLoaded(false);
         if (onModelHierarchyReady) onModelHierarchyReady([]);
@@ -635,19 +617,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
         animationGroupsRef.current = null;
         internalResetCameraAndEnvironment();
-      }).finally(() => {
-        if (modelFileExtension === '.obj' && processedFiles && processedFiles.length > 0) {
-            // Clean up FilesInput.FilesToLoad for the current set of files
-            processedFiles.forEach(file => {
-                delete FilesInput.FilesToLoad[file.name.toLowerCase()];
-            });
-        }
       });
 
   }, [
     modelUrl, 
     modelFileExtension, 
-    processedFiles,
+    // processedFiles, // removed
     onModelLoaded, 
     onModelHierarchyReady,
     onMaterialsReady, 
@@ -655,8 +630,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     internalResetCameraAndEnvironment,
     applyRenderingModeStyle,
     renderingMode, 
+    effectiveTheme, // Added back as it influences clearColor after env setup
     sceneRef,
-    effectiveTheme // Added effectiveTheme here because it influences clearColor on model load/reset
+    cameraRef // cameraRef used in .then block
   ]);
 
   // Effect for applying rendering mode when it changes
@@ -790,10 +766,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           });
           scene.environmentIntensity = 1.0;
 
-           if (effectiveTheme === 'light') {
-            scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
-          } else {
-            scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
+           if (sceneRef.current) { // Re-apply clear color after env setup
+            if (effectiveTheme === 'light') {
+                sceneRef.current.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1); 
+            } else { 
+                sceneRef.current.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);   
+            }
           }
         } else { 
           internalResetCameraAndEnvironment();
