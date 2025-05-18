@@ -143,38 +143,49 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if(groundMesh) {
       groundMesh.position.y = 0; 
     }
-  }, [effectiveTheme]);
+  }, [effectiveTheme, sceneRef]);
 
 
   const applyRenderingModeStyle = useCallback((
-    newRenderingMode: RenderingMode
+    newRenderingMode: RenderingMode,
+    assetContainer: Nullable<AssetContainer>,
+    currentModelFileExtension: string | null
   ) => {
-    if (!loadedAssetContainerRef.current || !sceneRef.current ) return;
+    if (!assetContainer || !sceneRef.current ) return;
     
+    // OBJ file rendering mode changes are handled differently or not at all due to inconsistencies
+    // if (currentModelFileExtension === '.obj') {
+    //  // For OBJ, StandardMaterial is common. We might need markAsDirty if we make changes.
+    //  // However, for now, if issues persist, we might limit changes for OBJ.
+    // }
+
     const processSingleMaterial = (mat: Material) => {
-      mat.wireframe = false;
-      mat.alpha = 1.0; 
+      // Ensure defaults for a 'shaded' look before applying specific mode
+      mat.wireframe = false; // Default for shaded and non-shaded
 
       if (mat instanceof PBRMaterial) {
-        mat.unlit = false; 
+        mat.unlit = false; // Default for shaded
         switch (newRenderingMode) {
           case 'shaded':
+            // Defaults are already set
             break;
           case 'non-shaded':
             mat.unlit = true;
             break;
           case 'wireframe':
             mat.wireframe = true;
-            mat.unlit = true; 
+            mat.unlit = true; // Wireframe on unlit base
             break;
         }
       } else if (mat instanceof StandardMaterial) {
-        mat.disableLighting = false; 
+        mat.disableLighting = false; // Default for shaded
+        // Ensure emissiveColor and ambientColor properties exist before trying to set them to black
         mat.emissiveColor = mat.emissiveColor || new Color3(0,0,0);
-        mat.ambientColor = mat.ambientColor || new Color3(0,0,0);  
+        mat.ambientColor = mat.ambientColor || new Color3(0,0,0);
 
         switch (newRenderingMode) {
           case 'shaded':
+            // Defaults are already set
             break;
           case 'non-shaded':
             mat.disableLighting = true;
@@ -188,15 +199,20 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             mat.ambientColor = Color3.Black();
             break;
         }
-      } else { 
+        if (currentModelFileExtension === '.obj') { // Only mark dirty for OBJ if changes are made
+            mat.markAsDirty(Material.AllDirtyFlag);
+        }
+      } else { // For other material types, only apply wireframe if requested
         if (newRenderingMode === 'wireframe') {
           mat.wireframe = true;
         }
+         if (currentModelFileExtension === '.obj') {
+            mat.markAsDirty(Material.AllDirtyFlag);
+        }
       }
-      mat.markAsDirty(Material.AllDirtyFlag); 
     };
     
-    loadedAssetContainerRef.current.meshes.forEach((mesh: AbstractMesh) => {
+    assetContainer.meshes.forEach((mesh: AbstractMesh) => {
         if (isHelperNodeByName(mesh.name) || !mesh.material) return;
 
         if (mesh.material instanceof MultiMaterial) {
@@ -300,6 +316,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         engineRef.current = null;
       }
       cameraRef.current = null;
+      setIsCurrentModelActuallyLoaded(false);
     };
   }, [onCameraReady, onFpsUpdate]);
 
@@ -476,35 +493,24 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         if (loadedAssetContainerRef.current) {
           
           loadedAssetContainerRef.current.materials.forEach(mat => {
-            const processMaterialForAlphaAndCulling = (materialInstance: Material) => {
-                materialInstance.backFaceCulling = false;
-                if (materialInstance instanceof PBRMaterial) {
-                    const pbrMat = materialInstance as PBRMaterial;
-                    if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
-                        if (pbrMat.alphaMode !== PBRMaterial.PBRMATERIAL_ALPHATEST && pbrMat.alphaMode !== PBRMaterial.PBRMATERIAL_ALPHABLEND_AND_TEST) { 
-                            pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
-                        }
-                        pbrMat.useAlphaFromAlbedoTexture = true;
-                    }
-                } else if (materialInstance instanceof StandardMaterial) {
-                    const stdMat = materialInstance as StandardMaterial;
-                    if (stdMat.diffuseTexture && stdMat.diffuseTexture.hasAlpha) {
-                        stdMat.useAlphaFromDiffuseTexture = true;
-                        stdMat.alpha = stdMat.alpha === 0 ? 1 : stdMat.alpha;
-                    }
-                }
-            };
+            mat.backFaceCulling = false;
 
-            if (mat instanceof MultiMaterial) {
-                mat.subMaterials.forEach(subMat => {
-                    if (subMat) processMaterialForAlphaAndCulling(subMat);
-                });
-            } else {
-                processMaterialForAlphaAndCulling(mat);
+            if (mat instanceof PBRMaterial) {
+              const pbrMat = mat as PBRMaterial;
+              if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
+                  pbrMat.useAlphaFromAlbedoTexture = true;
+                  // Trust the loader for transparencyMode based on glTF alphaMode
+              }
+            } else if (mat instanceof StandardMaterial) {
+              const stdMat = mat as StandardMaterial;
+              if (stdMat.diffuseTexture && stdMat.diffuseTexture.hasAlpha) {
+                  stdMat.useAlphaFromDiffuseTexture = true;
+                  if (stdMat.alpha === 0) stdMat.alpha = 1; // Avoid making opaque things transparent
+              }
             }
           });
 
-          applyRenderingModeStyle(renderingMode); 
+          applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current, modelFileExtension); 
         }
         
         onModelLoaded(true);
@@ -625,15 +631,16 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     applyRenderingModeStyle,
     renderingMode, 
     effectiveTheme, 
-    sceneRef 
+    sceneRef,
+    onCameraReady // Added onCameraReady to dep array for internalResetCameraAndEnvironment stability
   ]);
 
   // Effect for applying rendering mode when it changes
   useEffect(() => {
     if (isCurrentModelActuallyLoaded && loadedAssetContainerRef.current) {
-      applyRenderingModeStyle(renderingMode);
+      applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current, modelFileExtension);
     }
-  }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle]);
+  }, [renderingMode, isCurrentModelActuallyLoaded, applyRenderingModeStyle, modelFileExtension]);
 
 
   // Effect for toggling grid visibility
