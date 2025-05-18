@@ -406,7 +406,7 @@ export default function Home() {
                 break;
         }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, toggleExplorerPanel, modelHierarchy, isSoloActive]); 
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, toggleExplorerPanel, modelHierarchy, isSoloActive, handleToggleMeshVisibility]); 
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -850,7 +850,10 @@ export default function Home() {
             )}
         </main>
       </div>
+      {/* Footer for version */}
+      <footer className="h-10 flex-shrink-0 border-t border-border bg-card flex items-center px-4 text-sm text-muted-foreground justify-start shadow-sm">
+        <p>Version: 0.2.0</p>
+      </footer>
     </div>
   );
 }
-
