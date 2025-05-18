@@ -4,14 +4,14 @@
 import type { ModelNode } from './types';
 import { ChevronRight, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import React, { useState } from 'react';
-import { Button } from "@/components/ui/button"; // Added for icon button
+import { Button } from "@/components/ui/button";
 
 interface HierarchyNodeViewProps {
   node: ModelNode;
   defaultOpen?: boolean;
   hiddenMeshIds: Set<string>;
-  onToggleVisibility: (meshId: string) => void;
-  level?: number; // Optional: for indentation or styling based on depth
+  onToggleVisibility: (meshId: string, ctrlPressed: boolean) => void; // Updated signature
+  level?: number;
 }
 
 export const ModelHierarchyView: React.FC<HierarchyNodeViewProps> = ({ node, defaultOpen = false, hiddenMeshIds, onToggleVisibility, level = 0 }) => {
@@ -30,10 +30,10 @@ export const ModelHierarchyView: React.FC<HierarchyNodeViewProps> = ({ node, def
 
   const handleVisibilityClick = (event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent accordion from toggling
-    onToggleVisibility(node.id);
+    onToggleVisibility(node.id, event.ctrlKey); // Pass event.ctrlKey
   };
 
-  const isMesh = node.type === 'Mesh' || node.type === 'InstancedMesh' || node.type === 'AbstractMesh'; // Include AbstractMesh as some loaders might use it
+  const isMesh = node.type === 'Mesh' || node.type === 'InstancedMesh' || node.type === 'AbstractMesh';
   const isCurrentlyVisible = !hiddenMeshIds.has(node.id);
 
   return (
@@ -52,14 +52,14 @@ export const ModelHierarchyView: React.FC<HierarchyNodeViewProps> = ({ node, def
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 mr-1 p-0 data-[visibility-toggle]" // Added data attribute
+            className="h-5 w-5 mr-1 p-0 data-[visibility-toggle]"
             onClick={handleVisibilityClick}
-            title={isCurrentlyVisible ? "Hide Mesh" : "Show Mesh"}
+            title={isCurrentlyVisible ? "Hide Mesh (Ctrl+Click to Solo)" : "Show Mesh (Ctrl+Click to Solo)"}
           >
             {isCurrentlyVisible ? <Eye className="h-3.5 w-3.5 text-accent-foreground" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
           </Button>
         )}
-        {!isMesh && hasChildren && <div className="w-5 mr-1 flex-shrink-0" /> /* Placeholder for alignment if not mesh but has children */}
+        {!isMesh && hasChildren && <div className="w-5 mr-1 flex-shrink-0" /> /* Placeholder for alignment */}
 
 
         <span className="text-sm text-foreground truncate" title={node.name}>

@@ -29,6 +29,21 @@ type Theme = "light" | "dark" | "system";
 type EffectiveTheme = "light" | "dark";
 export type RenderingMode = 'shaded' | 'non-shaded' | 'wireframe';
 
+// Helper function to get all mesh IDs from the hierarchy
+const getAllMeshIdsFromHierarchy = (nodes: ModelNode[]): string[] => {
+  let ids: string[] = [];
+  for (const node of nodes) {
+    if (node.type === 'Mesh' || node.type === 'InstancedMesh' || node.type === 'AbstractMesh') {
+      ids.push(node.id);
+    }
+    if (node.children && node.children.length > 0) {
+      ids = ids.concat(getAllMeshIdsFromHierarchy(node.children));
+    }
+  }
+  return ids;
+};
+
+
 export default function Home() {
   const [submittedModelUrl, setSubmittedModelUrl] = useState<string | null>(null);
   const [modelFileExtension, setModelFileExtension] = useState<string | null>(null);
@@ -281,17 +296,28 @@ export default function Home() {
     setRequestFocusObject(false);
   }, []);
 
-  const handleToggleMeshVisibility = useCallback((meshId: string) => {
-    setHiddenMeshIds(prevIds => {
-      const newIds = new Set(prevIds);
-      if (newIds.has(meshId)) {
-        newIds.delete(meshId);
-      } else {
-        newIds.add(meshId);
+  const handleToggleMeshVisibility = useCallback((meshId: string, ctrlPressed: boolean) => {
+    if (ctrlPressed) {
+      const allIdsInScene = getAllMeshIdsFromHierarchy(modelHierarchy);
+      const newHiddenIds = new Set<string>();
+      for (const id of allIdsInScene) {
+        if (id !== meshId) {
+          newHiddenIds.add(id);
+        }
       }
-      return newIds;
-    });
-  }, []);
+      setHiddenMeshIds(newHiddenIds);
+    } else {
+      setHiddenMeshIds(prevIds => {
+        const newIds = new Set(prevIds);
+        if (newIds.has(meshId)) {
+          newIds.delete(meshId);
+        } else {
+          newIds.add(meshId);
+        }
+        return newIds;
+      });
+    }
+  }, [modelHierarchy]);
 
 
   return (
@@ -702,4 +728,3 @@ export default function Home() {
     </div>
   );
 }
-
