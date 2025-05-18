@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, PackageIcon, Sun, Moon, Laptop, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, GithubIcon, Camera, Focus } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, PackageIcon, Sun, Moon, Laptop, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, GithubIcon, Camera, Focus, Eye, EyeOff } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode, MaterialDetail } from '@/components/types';
@@ -68,6 +68,9 @@ export default function Home() {
 
   // Focus state
   const [requestFocusObject, setRequestFocusObject] = useState<boolean>(false);
+
+  // Mesh visibility state
+  const [hiddenMeshIds, setHiddenMeshIds] = useState<Set<string>>(new Set());
 
 
   useEffect(() => {
@@ -146,6 +149,7 @@ export default function Home() {
     setSubmittedModelUrl(null); 
     setModelHierarchy([]); 
     setMaterialDetails([]);
+    setHiddenMeshIds(new Set()); // Reset hidden meshes for new model
     // Reset animation states
     setHasAnimations(false);
     setIsPlayingAnimation(false);
@@ -186,6 +190,7 @@ export default function Home() {
       toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (e.g., .glb, .gltf, .obj).", variant: "destructive" });
       setModelHierarchy([]);
       setMaterialDetails([]);
+      setHiddenMeshIds(new Set());
       setHasAnimations(false);
     } else {
       setError(null); 
@@ -274,6 +279,18 @@ export default function Home() {
 
   const handleObjectFocused = useCallback(() => {
     setRequestFocusObject(false);
+  }, []);
+
+  const handleToggleMeshVisibility = useCallback((meshId: string) => {
+    setHiddenMeshIds(prevIds => {
+      const newIds = new Set(prevIds);
+      if (newIds.has(meshId)) {
+        newIds.delete(meshId);
+      } else {
+        newIds.add(meshId);
+      }
+      return newIds;
+    });
   }, []);
 
 
@@ -422,11 +439,19 @@ export default function Home() {
               </TabsContent>
               <TabsContent value="scene" className="flex-grow mt-3 overflow-y-auto">
                 {modelHierarchy.length > 0 ? (
-                  <ul className="space-y-0.5">
-                    {modelHierarchy.map(node => (
-                      <ModelHierarchyView key={node.id} node={node} defaultOpen={true} />
-                    ))}
-                  </ul>
+                  <ScrollArea className="h-full">
+                    <ul className="space-y-0.5">
+                      {modelHierarchy.map(node => (
+                        <ModelHierarchyView 
+                          key={node.id} 
+                          node={node} 
+                          defaultOpen={true} 
+                          hiddenMeshIds={hiddenMeshIds}
+                          onToggleVisibility={handleToggleMeshVisibility}
+                        />
+                      ))}
+                    </ul>
+                  </ScrollArea>
                 ) : submittedModelUrl && !isLoading && !error ? (
                   <p className="text-sm text-muted-foreground italic p-2">Model loaded, but no hierarchy data to display or model is empty.</p>
                 ) : !isLoading && !error && (
@@ -524,6 +549,7 @@ export default function Home() {
                   onScreenshotTaken={handleScreenshotTaken}
                   requestFocusObject={requestFocusObject}
                   onObjectFocused={handleObjectFocused}
+                  hiddenMeshIds={hiddenMeshIds}
               />
             )}
             

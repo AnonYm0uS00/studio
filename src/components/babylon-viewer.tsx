@@ -57,6 +57,7 @@ interface BabylonViewerProps {
   onScreenshotTaken: (dataUrl: string) => void;
   requestFocusObject?: boolean;
   onObjectFocused?: () => void;
+  hiddenMeshIds?: Set<string>;
 }
 
 const isHelperNodeByName = (nodeName: string): boolean => {
@@ -87,6 +88,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
   onScreenshotTaken,
   requestFocusObject,
   onObjectFocused,
+  hiddenMeshIds,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Nullable<Engine>>(null);
@@ -116,21 +118,18 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         oldEnv.dispose();
         scene.environmentTexture = null;
     }
-    const oldSkybox = scene.getMeshByName("hdrSkyBox"); // Ensure any explicit skybox is removed
+    const oldSkybox = scene.getMeshByName("hdrSkyBox"); 
     if (oldSkybox) {
         oldSkybox.dispose();
     }
     
     scene.createDefaultEnvironment({ 
-        createSkybox: false, // No visual skybox mesh
-        createGround: false, // No default ground
+        createSkybox: false, 
+        createGround: false, 
         skyboxSize: 150, 
         enableGroundShadow: false, 
     });
     scene.environmentIntensity = 1.0;
-    if (scene.environmentTexture) {
-      // scene.environmentTexture.samplingMode = Texture.TRILINEAR_SAMPLINGMODE; // This caused error
-    }
 
     if (effectiveTheme === 'light') {
       scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
@@ -149,49 +148,38 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     newRenderingMode: RenderingMode,
     container: Nullable<AssetContainer>
   ) => {
-    if (!container || !sceneRef.current) return;
-
+    if (!container || !sceneRef.current ) return;
+    
     const processSingleMaterial = (mat: Material) => {
-      // Reset to defaults first
+      // Defaults for 'shaded'
       mat.wireframe = false;
       if (mat instanceof PBRMaterial) {
         mat.unlit = false;
       } else if (mat instanceof StandardMaterial) {
         mat.disableLighting = false;
-        // Restore original emissive/ambient colors if needed, or set to sensible defaults for shaded mode
-        // This part is tricky without storing original values. For now, let's assume shaded means full lighting.
-        // If specific original emissive/ambient colors are desired for shaded mode, they'd need to be cached.
-        // For simplicity, we might just rely on the lights in the scene for shaded mode.
-         mat.emissiveColor = mat.emissiveColor || new Color3(0,0,0); // Default to black if not set
-         mat.ambientColor = mat.ambientColor || new Color3(0,0,0); // Default to black if not set
+         mat.emissiveColor = mat.emissiveColor || new Color3(0,0,0); 
+         mat.ambientColor = mat.ambientColor || new Color3(0,0,0); 
       }
 
+      // Apply specific mode
       switch (newRenderingMode) {
-        case 'shaded':
-          // Defaults are mostly set, ensure lighting is enabled
-          if (mat instanceof PBRMaterial) {
-            mat.unlit = false;
-          } else if (mat instanceof StandardMaterial) {
-            mat.disableLighting = false;
-          }
-          break;
         case 'non-shaded':
           if (mat instanceof PBRMaterial) {
             mat.unlit = true;
           } else if (mat instanceof StandardMaterial) {
             mat.disableLighting = true;
-            mat.emissiveColor = Color3.Black(); // Ensure no self-illumination
-            mat.ambientColor = Color3.Black(); // Ensure no ambient influence
+            mat.emissiveColor = Color3.Black(); 
+            mat.ambientColor = Color3.Black(); 
           }
           break;
         case 'wireframe':
           mat.wireframe = true;
           if (mat instanceof PBRMaterial) {
-            mat.unlit = true; // Render wireframe on unlit base
+            mat.unlit = true; 
           } else if (mat instanceof StandardMaterial) {
             mat.disableLighting = true;
-            mat.emissiveColor = Color3.Black(); // Ensure no self-illumination
-            mat.ambientColor = Color3.Black(); // Ensure no ambient influence
+            mat.emissiveColor = Color3.Black(); 
+            mat.ambientColor = Color3.Black(); 
           }
           break;
       }
@@ -247,7 +235,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     ground.isPickable = false;
     ground.position.y = 0;
     
-    // Initial environment and clear color based on current theme
     scene.createDefaultEnvironment({ createSkybox: false, createGround: false, skyboxSize: 150, enableGroundShadow: false });
     scene.environmentIntensity = 1.0;
 
@@ -295,7 +282,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       }
       cameraRef.current = null;
     };
-  }, [onCameraReady, onFpsUpdate]); // Removed effectiveTheme from here as it's handled separately
+  }, [onCameraReady, onFpsUpdate]);
 
 
   // Effect for scene.onBeforeRenderObservable (auto-rotate, animation progress)
@@ -461,7 +448,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             internalResetCameraAndEnvironment();
         }
         
-        // Apply initial rendering mode and transparency settings
         if (loadedAssetContainerRef.current) {
           applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
 
@@ -472,9 +458,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     const pbrMat = materialInstance as PBRMaterial;
                     if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
                         pbrMat.useAlphaFromAlbedoTexture = true;
-                        // Prefer ALPHABLEND unless ALPHATEST (MASK mode in glTF) was intended
                         if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST && 
-                            pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHABLEND) { // Check if not already set to a valid mode
+                            pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHABLEND) { 
                            pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
                         }
                     }
@@ -504,6 +489,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
               let nodeType = "Node";
               if (babylonNode instanceof Mesh) nodeType = "Mesh";
               else if (babylonNode instanceof TransformNode) nodeType = "TransformNode";
+              else if (babylonNode instanceof AbstractMesh) nodeType = "AbstractMesh"; // Added this
           
               const children = (babylonNode.getChildren ? babylonNode.getChildren() : [])
                   .filter(child => !isHelperNodeByName(child.name))
@@ -572,7 +558,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                 onAnimationsAvailable(false, 0);
             }
         }
-        // Re-apply clear color after model loading and potential environment changes
+
         if (effectiveTheme === 'light') {
           scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
         } else {
@@ -618,8 +604,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     onMaterialsReady, 
     onAnimationsAvailable,
     internalResetCameraAndEnvironment,
-    applyRenderingModeStyle, // Add this
-    renderingMode,          // And this
+    applyRenderingModeStyle,
+    renderingMode,         
     effectiveTheme 
   ]);
 
@@ -733,7 +719,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
           if (grid) {
             grid.position.y = modelBoundingMin.y - 0.01;
           }
-          // Dispose of old environment texture and skybox if they exist
           const oldEnv = scene.environmentTexture;
           if (oldEnv) {
             oldEnv.dispose();
@@ -773,6 +758,25 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       onObjectFocused();
     }
   }, [requestFocusObject, isCurrentModelActuallyLoaded, onObjectFocused, focusOnLoadedModel]);
+
+  // Effect for applying mesh visibility based on hiddenMeshIds
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const container = loadedAssetContainerRef.current;
+
+    if (!scene || !container || !isCurrentModelActuallyLoaded) return;
+
+    container.meshes.forEach((mesh: AbstractMesh) => {
+      if (!isHelperNodeByName(mesh.name)) { // Don't affect helper nodes
+        const meshIdStr = mesh.uniqueId.toString();
+        if (hiddenMeshIds && hiddenMeshIds.has(meshIdStr)) {
+          mesh.setEnabled(false);
+        } else {
+          mesh.setEnabled(true);
+        }
+      }
+    });
+  }, [hiddenMeshIds, isCurrentModelActuallyLoaded]);
 
 
   return <canvas ref={canvasRef} className="w-full h-full outline-none" touch-action="none" />;
