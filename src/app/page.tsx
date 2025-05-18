@@ -1,11 +1,11 @@
 
 'use client';
-import { useState, useRef, useCallback, useEffect, ChangeEvent } from 'react';
+import { useState, useRef, useCallback, useEffect, ChangeEvent, DragEvent } from 'react';
 import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, Info, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle, GithubIcon } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle, GithubIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode, MaterialDetail } from '@/components/types';
@@ -89,6 +89,10 @@ export default function Home() {
   const [hiddenMeshIds, setHiddenMeshIds] = useState<Set<string>>(new Set());
   const [isSoloActive, setIsSoloActive] = useState<boolean>(false);
 
+  // Drag and drop state
+  const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
+  const acceptedFileTypes = ".glb,.gltf,.obj";
+
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("theme") as Theme | null;
@@ -144,18 +148,11 @@ export default function Home() {
     }
   }, [theme]); 
 
-
-  const handleFileSelected = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) { 
-      if (event.target) { 
-        event.target.value = ""; 
-      }
-      return;
-    }
+  const processFile = useCallback((file: File) => {
+    if (!file) return;
 
     setSelectedFileName(file.name);
-    setModelName(file.name); 
+    setModelName(file.name);
 
     const nameParts = file.name.split('.');
     const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
@@ -163,12 +160,11 @@ export default function Home() {
 
     setError(null);
     setIsLoading(true);
-    setSubmittedModelUrl(null); 
-    setModelHierarchy([]); 
+    setSubmittedModelUrl(null);
+    setModelHierarchy([]);
     setMaterialDetails([]);
-    setHiddenMeshIds(new Set()); 
+    setHiddenMeshIds(new Set());
     setIsSoloActive(false);
-    // Reset animation states
     setHasAnimations(false);
     setIsPlayingAnimation(false);
     setAnimationProgress(0);
@@ -186,20 +182,63 @@ export default function Home() {
         setIsLoading(false);
         toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
       }
-       if (event.target) { 
-        event.target.value = ""; 
-      }
     };
     reader.onerror = () => {
       setError("Error reading file.");
       setIsLoading(false);
       toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
-       if (event.target) { 
-        event.target.value = ""; 
-      }
     };
     reader.readAsDataURL(file);
   }, [toast]);
+
+
+  const handleFileSelected = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      if (event.target) {
+        event.target.value = ""; // Reset input if no file selected (e.g., user cancels)
+      }
+      return;
+    }
+    processFile(file);
+    if (event.target) {
+      event.target.value = ""; // Reset input after processing to allow re-selection of the same file
+    }
+  }, [processFile]);
+
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(false);
+
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      const file = event.dataTransfer.files[0];
+      const fileType = `.${file.name.split('.').pop()?.toLowerCase()}`;
+      if (acceptedFileTypes.split(',').includes(fileType)) {
+        processFile(file);
+      } else {
+        toast({
+          title: "Invalid File Type",
+          description: `Please upload a supported file type: ${acceptedFileTypes}`,
+          variant: "destructive",
+        });
+      }
+      event.dataTransfer.clearData();
+    }
+  }, [processFile, toast, acceptedFileTypes]);
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(false);
+  }, []);
+
 
   const handleModelLoaded = useCallback((success: boolean, errorMessage?: string) => {
     setIsLoading(false);
@@ -213,7 +252,6 @@ export default function Home() {
       setHasAnimations(false);
     } else {
       setError(null); 
-      // toast({ title: "Model Loaded", description: "Model loaded successfully." }); // Removed this line
     }
   }, [toast]);
 
@@ -368,7 +406,7 @@ export default function Home() {
                 break;
         }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, toggleExplorerPanel, modelHierarchy, isSoloActive]); // Added modelHierarchy and isSoloActive
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode, toggleExplorerPanel, modelHierarchy, isSoloActive]); 
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -452,22 +490,22 @@ export default function Home() {
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-
-           <DropdownMenu>
+          
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Info">
-                <Info className="h-4 w-4" />
-                <span className="sr-only">Info</span>
-              </Button>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Info">
+                    <InfoIcon className="h-4 w-4" />
+                    <span className="sr-only">Info</span>
+                </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="mr-2 w-56">
-              <DropdownMenuLabel className="text-xs font-semibold">About</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <a href="https://github.com/Samscape0" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full text-sm">
-                  <GithubIcon className="h-3.5 w-3.5" /> Samscape0
-                </a>
-              </DropdownMenuItem>
+                <DropdownMenuLabel className="text-xs font-semibold">About</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                    <a href="https://github.com/Samscape0" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full text-sm">
+                        <GithubIcon className="h-3.5 w-3.5" /> Samscape0
+                    </a>
+                </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -576,26 +614,32 @@ export default function Home() {
         </aside>
 
         {/* Right Panel (Viewport / Upload Prompt) */}
-        <main className="flex-grow relative h-full bg-background">
+        <main 
+            className="flex-grow relative h-full bg-background"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
             <Input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelected}
                 className="hidden"
-                accept=".glb,.gltf,.obj"
+                accept={acceptedFileTypes}
                 aria-label="3D Model File"
             />
             {!submittedModelUrl && !isLoading && !error && (
                 <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
                     <div
-                        className="flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer backdrop-blur-md"
+                        className={`flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer backdrop-blur-md transition-all
+                                    ${isDraggingOver ? 'border-accent ring-2 ring-accent ring-offset-2' : 'border-border'}`}
                         onClick={triggerFileDialog}
                         role="button"
                         tabIndex={0}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") triggerFileDialog();}}
                     >
-                        <div className="flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4">
-                            <UploadCloud className="h-10 w-10 text-primary" />
+                        <div className={`flex items-center justify-center h-20 w-20 rounded-full bg-muted mb-4 transition-colors ${isDraggingOver ? 'bg-accent/20' : ''}`}>
+                            <UploadCloud className={`h-10 w-10 text-primary transition-colors ${isDraggingOver ? 'text-accent' : ''}`} />
                         </div>
                         <p className="text-lg font-medium text-foreground mb-1">Drag & Drop or Click to Upload</p>
                         <p className="text-xs text-muted-foreground">
@@ -643,7 +687,7 @@ export default function Home() {
                     variant={isGridVisible ? "secondary" : "outline"}
                     size="icon"
                     onClick={() => setIsGridVisible(!isGridVisible)}
-                    title="Hide Grid (Alt+G)"
+                    title="Toggle Grid (Alt+G)"
                     className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
                   >
                     <Grid className="h-4 w-4" />
@@ -689,7 +733,7 @@ export default function Home() {
                       <span className="sr-only">Show Shortcuts</span>
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="mr-4 w-auto text-xs p-3 bg-gradient-to-l from-card/30 via-card/10 to-transparent backdrop-blur-lg shadow-lg border-none">
+                  <PopoverContent className="mr-4 w-auto text-xs p-3 bg-gradient-to-l from-transparent via-card/10 to-card/30 backdrop-blur-lg shadow-lg border-none">
                     <h3 className="font-semibold text-sm text-foreground mb-1">ShortKeys</h3>
                     <ul className="space-y-0.5 text-muted-foreground">
                         <li>Toggle Grid: <kbd>Alt</kbd> + <kbd>G</kbd></li>
@@ -809,3 +853,4 @@ export default function Home() {
     </div>
   );
 }
+
