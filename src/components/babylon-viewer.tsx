@@ -154,7 +154,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     container: Nullable<AssetContainer>
   ) => {
     if (!container || !sceneRef.current ) return;
-    // Removed check for modelFileExtension === '.obj' to apply to all
     
     const processSingleMaterial = (mat: Material) => {
       // Defaults for 'shaded'
@@ -264,7 +263,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
     return () => {
       resizeObserver.disconnect();
-      isBusyRecordingTurntableRef.current = false; // Ensure recording stops on unmount
+      isBusyRecordingTurntableRef.current = false; 
 
       if (loadedAssetContainerRef.current) {
         loadedAssetContainerRef.current.dispose();
@@ -364,7 +363,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);   
       }
     }
-  }, [effectiveTheme]);
+  }, [effectiveTheme, sceneRef]);
 
 
   // Effect for loading the model
@@ -439,8 +438,10 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                         enableGroundShadow: false,
                     });
                     scene.environmentIntensity = 1.0;
-                    if (scene.environmentTexture) { // Re-apply sampling mode if env texture was recreated
-                       // Removed sampling mode setting
+                    if (effectiveTheme === 'light') {
+                        scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
+                    } else {
+                        scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
                     }
 
 
@@ -463,7 +464,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                 if (materialInstance instanceof PBRMaterial) {
                     const pbrMat = materialInstance as PBRMaterial;
                     if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
-                        if (pbrMat.alphaMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) { // Respect MASK mode
+                        if (pbrMat.alphaMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) { 
                             pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
                         }
                         pbrMat.useAlphaFromAlbedoTexture = true;
@@ -563,13 +564,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                 onAnimationsAvailable(false, 0);
             }
         }
-        if (effectiveTheme === 'light') { // Re-apply clear color after env setup
-          scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
-        } else {
-          scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
-        }
-
-
       })
       .catch(error => {
         console.error("Error loading model:", error);
@@ -609,7 +603,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     internalResetCameraAndEnvironment,
     applyRenderingModeStyle,
     renderingMode,         
-    effectiveTheme 
+    effectiveTheme,
+    sceneRef // Added sceneRef as it's used
   ]);
 
   // Effect for applying rendering mode when it changes
@@ -628,7 +623,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         gridMesh.setEnabled(isGridVisible);
       }
     }
-  }, [isGridVisible]); 
+  }, [isGridVisible, sceneRef]); 
 
   // Effect for controlling animation play/pause
   useEffect(() => {
@@ -748,7 +743,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     } else { 
       internalResetCameraAndEnvironment();
     }
-  }, [internalResetCameraAndEnvironment, effectiveTheme]);
+  }, [internalResetCameraAndEnvironment, effectiveTheme, sceneRef]);
 
 
   useEffect(() => {
@@ -775,7 +770,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
       }
     });
-  }, [hiddenMeshIds, isCurrentModelActuallyLoaded]);
+  }, [hiddenMeshIds, isCurrentModelActuallyLoaded, sceneRef]);
 
   // Effect for Turntable Recording
   useEffect(() => {
@@ -785,24 +780,25 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       const scene = sceneRef.current;
       const camera = cameraRef.current;
       
-      const capturedFramesDataUrls: string[] = []; // Store data URLs for now
+      const capturedFramesDataUrls: string[] = []; 
+
       const TURNTABLE_DURATION_SECONDS = 5;
       const TURNTABLE_FPS = 15;
       const TOTAL_FRAMES = TURNTABLE_DURATION_SECONDS * TURNTABLE_FPS;
 
       const initialAlpha = camera.alpha;
-      const initialBeta = camera.beta; // Store beta if you plan to restore it
-      const initialRadius = camera.radius; // Store radius
+      const initialBeta = camera.beta; 
+      const initialRadius = camera.radius; 
 
       camera.detachControl();
 
       let currentFrameIndex = 0;
 
       const recordFrame = async () => {
-        if (currentFrameIndex >= TOTAL_FRAMES || !isBusyRecordingTurntableRef.current) { // Check flag
+        if (currentFrameIndex >= TOTAL_FRAMES || !isBusyRecordingTurntableRef.current) { 
           camera.alpha = initialAlpha;
-          camera.beta = initialBeta; // Restore beta
-          camera.radius = initialRadius; // Restore radius
+          camera.beta = initialBeta; 
+          camera.radius = initialRadius; 
           camera.attachControl(canvasRef.current!, true);
           if (onTurntableComplete) onTurntableComplete(capturedFramesDataUrls.length);
           isBusyRecordingTurntableRef.current = false;
@@ -810,16 +806,14 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         }
 
         const progressRatio = currentFrameIndex / TOTAL_FRAMES;
-        camera.alpha = initialAlpha + progressRatio * (2 * Math.PI); // One full 360-degree rotation
+        camera.alpha = initialAlpha + progressRatio * (2 * Math.PI); 
 
         if (onTurntableProgressUpdate) {
           onTurntableProgressUpdate(((currentFrameIndex + 1) / TOTAL_FRAMES) * 100);
         }
         
-        // Force scene render
         scene.render();
 
-        // Capture screenshot
         const dataUrl = await new Promise<string>(resolveCapture => {
           Tools.CreateScreenshotUsingRenderTarget(
             engine,
@@ -827,39 +821,35 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             { 
               width: engine.getRenderWidth(), 
               height: engine.getRenderHeight(), 
-              precision: 0.75 // Slightly lower precision for faster capture during sequence
+              precision: 0.75 
             },
             (data) => resolveCapture(data)
           );
         });
-        // For now, we just count. In a real GIF impl, you'd add to encoder.
-        // capturedFramesDataUrls.push(dataUrl); 
+        
+        capturedFramesDataUrls.push(dataUrl); 
         
         currentFrameIndex++;
         
-        if (isBusyRecordingTurntableRef.current) { // Check flag before scheduling next
+        if (isBusyRecordingTurntableRef.current) { 
           setTimeout(recordFrame, 1000 / TURNTABLE_FPS);
-        } else { // If recording was stopped externally
+        } else { 
             camera.alpha = initialAlpha;
             camera.beta = initialBeta;
             camera.radius = initialRadius;
             camera.attachControl(canvasRef.current!, true);
-            if (onTurntableComplete) onTurntableComplete(capturedFramesDataUrls.length); // Or maybe 0 if interrupted
+            if (onTurntableComplete) onTurntableComplete(capturedFramesDataUrls.length); 
         }
       };
 
-      recordFrame(); // Start the recording loop
+      recordFrame(); 
     }
-    // Cleanup if recordTurntableTrigger becomes false while recording (e.g. user cancels)
-    // This specific effect structure handles starting, but cancellation/cleanup needs more thought
-    // if we need to interrupt an ongoing recording externally. For now, it completes or unmounts.
-    // The isBusyRecordingTurntableRef.current check inside recordFrame helps.
-  }, [recordTurntableTrigger, onTurntableProgressUpdate, onTurntableComplete]);
+  }, [recordTurntableTrigger, onTurntableProgressUpdate, onTurntableComplete, engineRef, sceneRef, cameraRef, canvasRef]);
 
   // Cleanup for turntable if component unmounts while recording
   useEffect(() => {
     return () => {
-      isBusyRecordingTurntableRef.current = false; // Signal recording loop to stop
+      isBusyRecordingTurntableRef.current = false; 
     };
   }, []);
 
