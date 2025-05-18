@@ -121,8 +121,8 @@ export default function Home() {
 
   const handleFileSelected = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) { // If no file is selected (e.g., user cancels dialog), do nothing
-      if (event.target) { // Reset file input value to allow re-selecting the same file
+    if (!file) { 
+      if (event.target) { 
         event.target.value = "";
       }
       return;
@@ -158,7 +158,7 @@ export default function Home() {
         setIsLoading(false);
         toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
       }
-       if (event.target) { // Reset file input value
+       if (event.target) { 
         event.target.value = "";
       }
     };
@@ -166,7 +166,7 @@ export default function Home() {
       setError("Error reading file.");
       setIsLoading(false);
       toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
-       if (event.target) { // Reset file input value
+       if (event.target) { 
         event.target.value = "";
       }
     };
@@ -239,8 +239,6 @@ export default function Home() {
     const newProgress = value[0];
     setAnimationProgress(newProgress);
     setRequestAnimationSeek(newProgress);
-    // If the user was playing, keep playing, otherwise stay paused.
-    // This prevents the animation from auto-playing when slider is moved while paused.
     setRequestPlayAnimation(isPlayingAnimation); 
   }, [isPlayingAnimation]);
 
@@ -332,10 +330,12 @@ export default function Home() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
-            <InfoIcon className="h-4 w-4" />
-            <span className="sr-only">Info</span>
-          </Button>
+          <a href="https://github.com/Samscape0" target="_blank" rel="noopener noreferrer" title="Samscape0 GitHub Profile">
+            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8">
+              <InfoIcon className="h-4 w-4" />
+              <span className="sr-only">Info / GitHub Profile</span>
+            </Button>
+          </a>
         </div>
       </header>
 
@@ -618,3 +618,4 @@ export default function Home() {
     </div>
   );
 }
+
