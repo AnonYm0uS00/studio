@@ -4,7 +4,8 @@ import { useState, useRef, useCallback, useEffect, ChangeEvent, DragEvent } from
 import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { BabylonViewer } from '@/components/babylon-viewer';
+// import { BabylonViewer } from '@/components/babylon-viewer'; // Removed static import
+import dynamic from 'next/dynamic'; // Added for lazy loading
 import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle, GithubIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,7 +25,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+// Dynamically import BabylonViewer
+const DynamicBabylonViewer = dynamic(() => import('@/components/babylon-viewer').then(mod => mod.BabylonViewer), {
+  ssr: false, // Babylon.js needs window object, so disable SSR
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center bg-background">
+      <div className="flex flex-col items-center bg-card p-8 rounded-lg shadow-xl">
+        <svg className="animate-spin h-10 w-10 text-primary mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p className="text-foreground text-lg">Loading 3D Viewer...</p>
+      </div>
+    </div>
+  )
+});
 
 
 type Theme = "light" | "dark" | "system";
@@ -117,25 +133,27 @@ export default function Home() {
 
   useEffect(() => {
     const applyThemeSettings = () => {
+      let newEffectiveTheme: EffectiveTheme = 'light';
       if (theme === "light") {
         document.documentElement.classList.remove("dark");
         localStorage.setItem("theme", "light");
-        setEffectiveTheme('light');
+        newEffectiveTheme = 'light';
       } else if (theme === "dark") {
         document.documentElement.classList.add("dark");
         localStorage.setItem("theme", "dark");
-        setEffectiveTheme('dark');
+        newEffectiveTheme = 'dark';
       } else { 
         localStorage.removeItem("theme"); 
         const systemIsDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         if (systemIsDark) {
           document.documentElement.classList.add("dark");
-          setEffectiveTheme('dark');
+          newEffectiveTheme = 'dark';
         } else {
           document.documentElement.classList.remove("dark");
-          setEffectiveTheme('light');
+          newEffectiveTheme = 'light';
         }
       }
+      setEffectiveTheme(newEffectiveTheme);
     };
 
     applyThemeSettings();
@@ -150,8 +168,11 @@ export default function Home() {
     }
   }, [theme]); 
 
-  const processFile = useCallback((file: File | null) => {
+ const processFile = useCallback((file: File | null) => {
     if (!file) {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""; // Reset file input
+      }
       return;
     }
 
@@ -177,6 +198,7 @@ export default function Home() {
     const nameParts = file.name.split('.');
     const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
 
+
     if (!acceptedFileTypes.split(',').includes(ext)) {
       toast({
         title: "Invalid File Type",
@@ -184,6 +206,9 @@ export default function Home() {
         variant: "destructive",
       });
       setIsLoading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""; // Reset file input
+      }
       return;
     }
     setModelFileExtension(ext);
@@ -203,6 +228,9 @@ export default function Home() {
       setIsLoading(false);
     };
     reader.readAsDataURL(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""; // Reset file input after processing
+    }
   }, [acceptedFileTypes, toast]);
 
 
@@ -215,9 +243,7 @@ export default function Home() {
       return;
     }
     processFile(files[0]);
-    if (event.target) {
-      event.target.value = ""; 
-    }
+    // Don't reset event.target.value here, processFile will do it if fileInputRef.current exists
   }, [processFile]);
 
   const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
@@ -226,7 +252,7 @@ export default function Home() {
     setIsDraggingOver(false);
 
     if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-      const droppedFile = event.dataTransfer.files[0]; // Process only the first dropped file
+      const droppedFile = event.dataTransfer.files[0]; 
       if (droppedFile) {
         processFile(droppedFile);
       }
@@ -247,15 +273,15 @@ export default function Home() {
             if (paths && paths.length > 0) {
               try {
                 setIsLoading(true);
-                const filePath = paths[0]; // Process only the first dropped file path
+                const filePath = paths[0]; 
                 const name = await basename(filePath);
                 const binaryData = await readBinaryFile(filePath);
                 let mimeType = 'application/octet-stream';
                 const lowerName = name.toLowerCase();
                 if (lowerName.endsWith('.glb')) mimeType = 'model/gltf-binary';
                 else if (lowerName.endsWith('.gltf')) mimeType = 'model/gltf+json';
-                else if (lowerName.endsWith('.obj')) mimeType = 'text/plain'; // Or 'model/obj' - but text/plain is safer for DataURL
-                // Add other MIME types as needed, but MTL specific loading is removed
+                else if (lowerName.endsWith('.obj')) mimeType = 'text/plain'; 
+                
                 const file = new File([binaryData], name, { type: mimeType });
                 processFile(file);
               } catch (err) {
@@ -269,7 +295,7 @@ export default function Home() {
                 setIsLoading(false);
               }
             }
-             setIsDraggingOver(false); // Ensure dragging state is reset
+             setIsDraggingOver(false);
           });
 
           const unlistenDragHover = await listen('tauri://file-drop-hover', () => {
@@ -331,8 +357,6 @@ export default function Home() {
     setIsLoading(false);
     if (!success) {
       setError(errorMessage || "Failed to load model.");
-      // Toast removed for model loaded successfully.
-      // toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model.", variant: "destructive" });
       setModelHierarchy([]);
       setMaterialDetails([]);
       setHiddenMeshIds(new Set());
@@ -768,7 +792,7 @@ export default function Home() {
             {!submittedModelUrl && !isLoading && !error && (
                 <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
                     <div
-                        className={`flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border border-border cursor-pointer backdrop-blur-md transition-all
+                        className={`flex flex-col items-center justify-center p-10 bg-card rounded-lg shadow-xl border backdrop-blur-md transition-all
                                     ${isDraggingOver ? 'border-accent ring-2 ring-accent ring-offset-2' : 'border-border'}`}
                         onClick={triggerFileDialog}
                         role="button"
@@ -790,7 +814,7 @@ export default function Home() {
             )}
 
             {(submittedModelUrl || isLoading || error) && (
-              <BabylonViewer
+              <DynamicBabylonViewer
                   modelUrl={submittedModelUrl}
                   modelFileExtension={modelFileExtension}
                   onModelLoaded={handleModelLoaded}
