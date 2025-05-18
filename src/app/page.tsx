@@ -213,6 +213,7 @@ export default function Home() {
       setHasAnimations(false);
     } else {
       setError(null); 
+      toast({ title: "Model Loaded", description: "Model loaded successfully." });
     }
   }, [toast]);
 
@@ -809,7 +810,7 @@ export default function Home() {
       {/* Bottom Bar */}
       <footer className="h-8 flex-shrink-0 border-t border-border bg-card/70 backdrop-blur-md flex items-center px-4 shadow-md">
         <p className="text-xs text-muted-foreground">
-            {isLoading ? "Loading model..." : error ? "Error loading model" : submittedModelUrl ? `Viewing: ${modelName}` : "Ready to load model"}
+            Version: 0.2.0
         </p>
       </footer>
     </div>
