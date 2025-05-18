@@ -23,7 +23,7 @@ import {
   Mesh,
   AnimationGroup,
   Tools,
-  Texture, // Keep if used for samplingMode, otherwise remove if not used elsewhere
+  Texture,
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF';
@@ -97,10 +97,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
   const animationGroupsRef = useRef<Nullable<AnimationGroup[]>>(null);
   const totalDurationSecondsRef = useRef<number>(0);
-  const frameRateRef = useRef<number>(60); // Default, will be updated if animation has different rate
+  const frameRateRef = useRef<number>(60);
   const isPlayingInternalRef = useRef<boolean>(false);
   const animationProgressObserverRef = useRef<any>(null);
-
 
   const internalResetCameraAndEnvironment = useCallback(() => {
     const scene = sceneRef.current;
@@ -117,18 +116,21 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         oldEnv.dispose();
         scene.environmentTexture = null;
     }
-    const oldSkybox = scene.getMeshByName("hdrSkyBox");
+    const oldSkybox = scene.getMeshByName("hdrSkyBox"); // Ensure any explicit skybox is removed
     if (oldSkybox) {
         oldSkybox.dispose();
     }
     
     scene.createDefaultEnvironment({ 
-        createSkybox: false, 
-        createGround: false,
+        createSkybox: false, // No visual skybox mesh
+        createGround: false, // No default ground
         skyboxSize: 150, 
         enableGroundShadow: false, 
     });
     scene.environmentIntensity = 1.0;
+    if (scene.environmentTexture) {
+      // scene.environmentTexture.samplingMode = Texture.TRILINEAR_SAMPLINGMODE; // This caused error
+    }
 
     if (effectiveTheme === 'light') {
       scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
@@ -150,35 +152,46 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     if (!container || !sceneRef.current) return;
 
     const processSingleMaterial = (mat: Material) => {
-      // Default states
+      // Reset to defaults first
       mat.wireframe = false;
       if (mat instanceof PBRMaterial) {
         mat.unlit = false;
       } else if (mat instanceof StandardMaterial) {
         mat.disableLighting = false;
+        // Restore original emissive/ambient colors if needed, or set to sensible defaults for shaded mode
+        // This part is tricky without storing original values. For now, let's assume shaded means full lighting.
+        // If specific original emissive/ambient colors are desired for shaded mode, they'd need to be cached.
+        // For simplicity, we might just rely on the lights in the scene for shaded mode.
+         mat.emissiveColor = mat.emissiveColor || new Color3(0,0,0); // Default to black if not set
+         mat.ambientColor = mat.ambientColor || new Color3(0,0,0); // Default to black if not set
       }
 
-      // Apply specific mode
       switch (newRenderingMode) {
         case 'shaded':
-          // Defaults cover this.
-          // For StandardMaterial, disableLighting is false.
-          // For PBRMaterial, unlit is false.
+          // Defaults are mostly set, ensure lighting is enabled
+          if (mat instanceof PBRMaterial) {
+            mat.unlit = false;
+          } else if (mat instanceof StandardMaterial) {
+            mat.disableLighting = false;
+          }
           break;
         case 'non-shaded':
           if (mat instanceof PBRMaterial) {
             mat.unlit = true;
           } else if (mat instanceof StandardMaterial) {
             mat.disableLighting = true;
+            mat.emissiveColor = Color3.Black(); // Ensure no self-illumination
+            mat.ambientColor = Color3.Black(); // Ensure no ambient influence
           }
           break;
         case 'wireframe':
           mat.wireframe = true;
-          // Make wireframe appear on an unlit base
           if (mat instanceof PBRMaterial) {
-            mat.unlit = true;
+            mat.unlit = true; // Render wireframe on unlit base
           } else if (mat instanceof StandardMaterial) {
             mat.disableLighting = true;
+            mat.emissiveColor = Color3.Black(); // Ensure no self-illumination
+            mat.ambientColor = Color3.Black(); // Ensure no ambient influence
           }
           break;
       }
@@ -234,9 +247,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     ground.isPickable = false;
     ground.position.y = 0;
     
+    // Initial environment and clear color based on current theme
     scene.createDefaultEnvironment({ createSkybox: false, createGround: false, skyboxSize: 150, enableGroundShadow: false });
     scene.environmentIntensity = 1.0;
-
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -282,8 +295,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       }
       cameraRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onCameraReady]);
+  }, [onCameraReady, onFpsUpdate]); // Removed effectiveTheme from here as it's handled separately
 
 
   // Effect for scene.onBeforeRenderObservable (auto-rotate, animation progress)
@@ -359,7 +371,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);   
       }
     }
-  }, [effectiveTheme, sceneRef]);
+  }, [effectiveTheme]);
 
 
   // Effect for loading the model
@@ -426,6 +438,11 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                     if(grid) {
                         grid.position.y = modelBoundingMin.y - 0.01; 
                     }
+                    const oldEnv = scene.environmentTexture;
+                    if (oldEnv) { oldEnv.dispose(); scene.environmentTexture = null; }
+                    const oldSkybox = scene.getMeshByName("hdrSkyBox");
+                    if (oldSkybox) { oldSkybox.dispose(); }
+
                     scene.createDefaultEnvironment({
                         createSkybox: false, 
                         createGround: false,
@@ -444,17 +461,20 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             internalResetCameraAndEnvironment();
         }
         
-        applyRenderingModeStyle(renderingMode, container);
+        // Apply initial rendering mode and transparency settings
+        if (loadedAssetContainerRef.current) {
+          applyRenderingModeStyle(renderingMode, loadedAssetContainerRef.current);
 
-        container.materials.forEach(mat => {
-            const processMaterialForCullingAndTransparency = (materialInstance: Material) => {
+          loadedAssetContainerRef.current.materials.forEach(mat => {
+            const processMaterialForAlphaAndCulling = (materialInstance: Material) => {
                 materialInstance.backFaceCulling = false;
-
                 if (materialInstance instanceof PBRMaterial) {
                     const pbrMat = materialInstance as PBRMaterial;
                     if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
                         pbrMat.useAlphaFromAlbedoTexture = true;
-                        if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) { 
+                        // Prefer ALPHABLEND unless ALPHATEST (MASK mode in glTF) was intended
+                        if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST && 
+                            pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHABLEND) { // Check if not already set to a valid mode
                            pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
                         }
                     }
@@ -468,12 +488,13 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
             if (mat instanceof MultiMaterial) {
                 mat.subMaterials.forEach(subMat => {
-                    if (subMat) processMaterialForCullingAndTransparency(subMat);
+                    if (subMat) processMaterialForAlphaAndCulling(subMat);
                 });
             } else {
-                processMaterialForCullingAndTransparency(mat);
+                processMaterialForAlphaAndCulling(mat);
             }
-        });
+          });
+        }
         
         onModelLoaded(true);
         setIsCurrentModelActuallyLoaded(true); 
@@ -497,7 +518,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             };
           
             const hierarchyRoots: ModelNode[] = container.rootNodes
-              .filter(node => !isHelperNodeByName(node.name))
+              .filter(node => !isHelperNodeByName(node.name)) 
               .map(buildNodeHierarchy);
           
             onModelHierarchyReady(hierarchyRoots);
@@ -589,7 +610,6 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         else scene.clearColor = new Color4(38/255, 38/255, 38/255, 1);
       });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     modelUrl, 
     modelFileExtension, 
@@ -598,8 +618,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     onMaterialsReady, 
     onAnimationsAvailable,
     internalResetCameraAndEnvironment,
-    applyRenderingModeStyle, 
-    renderingMode,          
+    applyRenderingModeStyle, // Add this
+    renderingMode,          // And this
     effectiveTheme 
   ]);
 
@@ -619,7 +639,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         gridMesh.setEnabled(isGridVisible);
       }
     }
-  }, [isGridVisible, sceneRef]); 
+  }, [isGridVisible]); 
 
   // Effect for controlling animation play/pause
   useEffect(() => {
