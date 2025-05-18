@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect, ChangeEvent, DragEvent } from
 import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { BabylonViewer } from '@/components/babylon-viewer'; // Reverted to static import
+import { BabylonViewer } from '@/components/babylon-viewer'; 
 import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle, GithubIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,8 +25,6 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
-// Tauri API dynamic imports will remain in handleScreenshotTaken
-// Removed dynamic import for BabylonViewer
 
 type Theme = "light" | "dark" | "system";
 type EffectiveTheme = "light" | "dark";
@@ -331,7 +329,7 @@ export default function Home() {
     event.stopPropagation();
     setTimeout(() => {
         const relatedTarget = event.relatedTarget as Node;
-        if (event.currentTarget && !event.currentTarget.contains(relatedTarget)) { // Added check for event.currentTarget
+        if (event.currentTarget && !event.currentTarget.contains(relatedTarget)) {
             setIsDraggingOver(false);
         }
     }, 50);
@@ -543,7 +541,7 @@ export default function Home() {
                 break;
         }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error, toggleExplorerPanel, setIsGridVisible, setRequestFocusObject, setRenderingMode]); 
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, toggleExplorerPanel, setIsGridVisible, setRequestFocusObject, setRenderingMode, modelHierarchy, isSoloActive]); 
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -574,8 +572,8 @@ export default function Home() {
             variant="ghost" 
             size="icon" 
             className="text-muted-foreground hover:text-accent-foreground h-8 w-8"
-            onClick={triggerFileDialog} // Made functional again
-            title="Open new file (Ctrl+N)" // Title added
+            onClick={triggerFileDialog}
+            title="Open new file (Ctrl+N)"
           >
             <FileText className="h-4 w-4" />
             <span className="sr-only">Open File</span>
@@ -801,7 +799,7 @@ export default function Home() {
             )}
 
             {(submittedModelUrl || isLoading || error) && (
-              <BabylonViewer // Reverted from DynamicBabylonViewer
+              <BabylonViewer
                   modelUrl={submittedModelUrl}
                   modelFileExtension={modelFileExtension}
                   onModelLoaded={handleModelLoaded}

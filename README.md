@@ -1,6 +1,6 @@
-# Open3D
+# Open3D Viewer
 
-Open3D is a lightweight and theme-adaptive 3D model viewer that supports `.obj`, `.glb`, and `.gltf` files. Designed for performance and usability, Open3D includes scene hierarchy exploration, material previewing, camera controls, and shading options. Ideal for quick previews and debugging 3D assets.
+Open3D Viewer is a lightweight and theme-adaptive 3D model viewer that supports `.obj`, `.glb`, and `.gltf` files. Designed for performance and usability, Open3D Viewer includes scene hierarchy exploration, material previewing, camera controls, and shading options. Ideal for quick previews and debugging 3D assets.
 
 ---
 
