@@ -346,8 +346,25 @@ export default function Home() {
       if (submittedModelUrl && !isLoading && !error) {
         setRequestFocusObject(true);
       }
+    } else if (!event.ctrlKey && !event.altKey && !event.metaKey) { // No modifiers for 1, 2, 3
+        switch (event.key) {
+            case '1':
+                event.preventDefault();
+                setRenderingMode('shaded');
+                break;
+            case '2':
+                event.preventDefault();
+                setRenderingMode('non-shaded');
+                break;
+            case '3':
+                event.preventDefault();
+                setRenderingMode('wireframe');
+                break;
+            default:
+                break;
+        }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error]); 
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, setIsGridVisible, setRequestFocusObject, setRenderingMode]); 
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -674,6 +691,9 @@ export default function Home() {
                         <li>Toggle Grid: <kbd>Alt</kbd> + <kbd>G</kbd></li>
                         <li>Open File: <kbd>Ctrl</kbd> + <kbd>N</kbd></li>
                         <li>Focus Model: <kbd>F</kbd></li>
+                        <li>Shaded View: <kbd>1</kbd></li>
+                        <li>Non-Shaded View: <kbd>2</kbd></li>
+                        <li>Wireframe View: <kbd>3</kbd></li>
                     </ul>
                   </PopoverContent>
                 </Popover>
@@ -720,6 +740,7 @@ export default function Home() {
                       size="sm"
                       onClick={() => setRenderingMode('shaded')}
                       className="text-xs h-7 px-2"
+                      title="Shaded (1)"
                     >
                       Shaded
                     </Button>
@@ -728,6 +749,7 @@ export default function Home() {
                       size="sm"
                       onClick={() => setRenderingMode('non-shaded')}
                       className="text-xs h-7 px-2"
+                       title="Non-Shaded (2)"
                     >
                       Non-Shaded
                     </Button>
@@ -736,6 +758,7 @@ export default function Home() {
                       size="sm"
                       onClick={() => setRenderingMode('wireframe')}
                       className="text-xs h-7 px-2"
+                      title="Wireframe (3)"
                     >
                       Wireframe
                     </Button>
@@ -788,3 +811,4 @@ export default function Home() {
     </div>
   );
 }
+
