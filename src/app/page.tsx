@@ -24,13 +24,23 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 
 type Theme = "light" | "dark" | "system";
 type EffectiveTheme = "light" | "dark";
 export type RenderingMode = 'shaded' | 'non-shaded' | 'wireframe';
 
-// Helper function to get all mesh IDs from the hierarchy
+const base64ToUint8Array = (base64: string): Uint8Array => {
+  const binaryString = window.atob(base64.split(',')[1]);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+};
+
 const getAllMeshIdsFromHierarchy = (nodes: ModelNode[]): string[] => {
   let ids: string[] = [];
   for (const node of nodes) {
@@ -69,29 +79,22 @@ export default function Home() {
   const [isAutoRotating, setIsAutoRotating] = useState<boolean>(false);
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false);
 
-  // Animation state
   const [hasAnimations, setHasAnimations] = useState<boolean>(false);
   const [isPlayingAnimation, setIsPlayingAnimation] = useState<boolean>(false);
-  const [animationProgress, setAnimationProgress] = useState<number>(0); // 0-100
+  const [animationProgress, setAnimationProgress] = useState<number>(0); 
   const [animationDurationSeconds, setAnimationDurationSeconds] = useState<number>(0);
   const [animationCurrentTimeSeconds, setAnimationCurrentTimeSeconds] = useState<number>(0);
   
   const [requestPlayAnimation, setRequestPlayAnimation] = useState<boolean | undefined>(undefined);
   const [requestAnimationSeek, setRequestAnimationSeek] = useState<number | undefined>(undefined);
 
-  // Screenshot state
   const [requestScreenshot, setRequestScreenshot] = useState<boolean>(false);
-
-  // Focus state
   const [requestFocusObject, setRequestFocusObject] = useState<boolean>(false);
-
-  // Mesh visibility state
   const [hiddenMeshIds, setHiddenMeshIds] = useState<Set<string>>(new Set());
   const [isSoloActive, setIsSoloActive] = useState<boolean>(false);
-
-  // Drag and drop state
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
   const acceptedFileTypes = ".glb,.gltf,.obj";
+  const [processedFiles, setProcessedFiles] = useState<File[] | null>(null);
 
 
   useEffect(() => {
@@ -148,18 +151,16 @@ export default function Home() {
     }
   }, [theme]); 
 
-  const processFile = useCallback((file: File) => {
-    if (!file) return;
+  const processFiles = useCallback((filesToProcess: File[]) => {
+    if (!filesToProcess || filesToProcess.length === 0) {
+      return;
+    }
 
-    setSelectedFileName(file.name);
-    setModelName(file.name);
-
-    const nameParts = file.name.split('.');
-    const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
-    setModelFileExtension(ext);
-
+    setSelectedFileName(null);
+    setModelName(null);
+    setModelFileExtension(null);
     setError(null);
-    setIsLoading(true);
+    // setIsLoading(true); // Moved down to specific cases
     setSubmittedModelUrl(null);
     setModelHierarchy([]);
     setMaterialDetails([]);
@@ -172,40 +173,109 @@ export default function Home() {
     setAnimationCurrentTimeSeconds(0);
     setRequestPlayAnimation(undefined);
     setRequestAnimationSeek(undefined);
+    setProcessedFiles(null); 
 
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        setSubmittedModelUrl(e.target.result as string);
-      } else {
-        setError("Failed to read file.");
-        setIsLoading(false);
-        // toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
-      }
-    };
-    reader.onerror = () => {
-      setError("Error reading file.");
-      setIsLoading(false);
-      // toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
-    };
-    reader.readAsDataURL(file);
-  }, [toast]);
+    const objFile = filesToProcess.find(f => f.name.toLowerCase().endsWith('.obj'));
+
+    if (objFile && filesToProcess.length > 1) { // Multi-file OBJ case (OBJ + MTL + textures)
+        const mainFile = objFile;
+        setSelectedFileName(mainFile.name);
+        setModelName(mainFile.name);
+        const nameParts = mainFile.name.split('.');
+        const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
+        setModelFileExtension(ext);
+        setIsLoading(true);
+        setSubmittedModelUrl(`obj_multi_file_trigger:${mainFile.name}`); 
+        setProcessedFiles(filesToProcess);
+    } else if (filesToProcess.length === 1) { // Single file case (GLB, GLTF, or lone OBJ)
+        const file = filesToProcess[0];
+        setSelectedFileName(file.name);
+        setModelName(file.name);
+        const nameParts = file.name.split('.');
+        const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
+
+        if (!acceptedFileTypes.split(',').includes(ext)) {
+          toast({
+            title: "Invalid File Type",
+            description: `Please upload a supported file type: ${acceptedFileTypes}`,
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+        setModelFileExtension(ext);
+        setIsLoading(true);
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (e.target?.result) {
+            setSubmittedModelUrl(e.target.result as string);
+          } else {
+            setError("Failed to read file.");
+            setIsLoading(false);
+          }
+        };
+        reader.onerror = () => {
+          setError("Error reading file.");
+          setIsLoading(false);
+        };
+        reader.readAsDataURL(file);
+    } else {
+        // Attempt to find the first valid single model file if multiple non-OBJ files are dropped
+        const firstValidFile = filesToProcess.find(f => {
+            const nameParts = f.name.split('.');
+            const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
+            return acceptedFileTypes.split(',').includes(ext);
+        });
+
+        if (firstValidFile) {
+            setSelectedFileName(firstValidFile.name);
+            setModelName(firstValidFile.name);
+            const nameParts = firstValidFile.name.split('.');
+            const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
+            setModelFileExtension(ext);
+            setIsLoading(true);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              if (e.target?.result) {
+                setSubmittedModelUrl(e.target.result as string);
+              } else {
+                setError("Failed to read file.");
+                setIsLoading(false);
+              }
+            };
+            reader.onerror = () => {
+              setError("Error reading file.");
+              setIsLoading(false);
+            };
+            reader.readAsDataURL(firstValidFile);
+        } else if (filesToProcess.length > 0) { // If files were dropped but none are valid single types and not OBJ multi
+            toast({
+                title: "No Supported Model",
+                description: `Please drop a supported model file (${acceptedFileTypes}) or a set of OBJ+MTL+textures.`,
+                variant: "destructive",
+            });
+            setIsLoading(false);
+        }
+        // If no files or no valid files, it will effectively do nothing or show the above toast.
+    }
+  }, [acceptedFileTypes, toast]);
 
 
   const handleFileSelected = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
       if (event.target) {
         event.target.value = ""; 
       }
       return;
     }
-    processFile(file);
+    processFiles(Array.from(files));
     if (event.target) {
       event.target.value = ""; 
     }
-  }, [processFile]);
+  }, [processFiles]);
 
   const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -213,31 +283,107 @@ export default function Home() {
     setIsDraggingOver(false);
 
     if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-      const file = event.dataTransfer.files[0];
-      const fileType = `.${file.name.split('.').pop()?.toLowerCase()}`;
-      if (acceptedFileTypes.split(',').includes(fileType)) {
-        processFile(file);
-      } else {
-        toast({
-          title: "Invalid File Type",
-          description: `Please upload a supported file type: ${acceptedFileTypes}`,
-          variant: "destructive",
-        });
-      }
+      processFiles(Array.from(event.dataTransfer.files));
       event.dataTransfer.clearData();
     }
-  }, [processFile, toast, acceptedFileTypes]);
+  }, [processFiles]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.__TAURI_IPC__) {
+      const setupTauriListeners = async () => {
+        try {
+          const { listen, Event: TauriEvent } = await import('@tauri-apps/api/event');
+          const { readBinaryFile } = await import('@tauri-apps/api/fs');
+          const { basename } = await import('@tauri-apps/api/path');
+
+          const unlistenFileDrop = await listen('tauri://file-drop', async (event: TauriEvent<string[]>) => {
+            const paths = event.payload;
+            if (paths && paths.length > 0) {
+              try {
+                setIsLoading(true);
+                const filesPromises = paths.map(async (filePath: string) => {
+                  const name = await basename(filePath);
+                  const binaryData = await readBinaryFile(filePath);
+                  let mimeType = 'application/octet-stream';
+                  const lowerName = name.toLowerCase();
+                  if (lowerName.endsWith('.glb')) mimeType = 'model/gltf-binary';
+                  else if (lowerName.endsWith('.gltf')) mimeType = 'model/gltf+json';
+                  else if (lowerName.endsWith('.obj')) mimeType = 'text/plain';
+                  else if (lowerName.endsWith('.mtl')) mimeType = 'text/plain';
+                  else if (lowerName.endsWith('.png')) mimeType = 'image/png';
+                  else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) mimeType = 'image/jpeg';
+                  return new File([binaryData], name, { type: mimeType });
+                });
+                const files = await Promise.all(filesPromises);
+                processFiles(files);
+              } catch (err) {
+                console.error("Tauri file drop processing error:", err);
+                setError("Failed to process dropped files via Tauri.");
+                toast({
+                  title: "File Drop Error",
+                  description: "Could not process the dropped files. " + (err instanceof Error ? err.message : String(err)),
+                  variant: "destructive",
+                });
+                setIsLoading(false);
+              }
+            }
+             setIsDraggingOver(false); // Ensure dragging state is reset
+          });
+
+          const unlistenDragHover = await listen('tauri://file-drop-hover', () => {
+            if (!submittedModelUrl && !isLoading) {
+               setIsDraggingOver(true);
+            }
+          });
+
+          const unlistenDragCancelled = await listen('tauri://file-drop-cancelled', () => {
+             setIsDraggingOver(false);
+          });
+
+          return () => {
+            unlistenFileDrop();
+            unlistenDragHover();
+            unlistenDragCancelled();
+          };
+        } catch (e) {
+            console.warn("Failed to set up Tauri listeners. Running in browser mode or Tauri API not available.", e);
+            // Fallback to browser behavior, no specific action needed here for listeners
+        }
+      };
+      
+      let cleanupFunction: (() => void) | undefined;
+      setupTauriListeners().then(cleanup => {
+        if (cleanup) {
+            cleanupFunction = cleanup;
+        }
+      });
+      
+      return () => {
+        if (cleanupFunction) {
+            cleanupFunction();
+        }
+      };
+    }
+  }, [processFiles, submittedModelUrl, isLoading, toast]); // Added isLoading and toast to dependencies
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    setIsDraggingOver(true);
-  }, []);
+    if (!submittedModelUrl && !isLoading) { // Only show drag over effect if drop zone is active
+        setIsDraggingOver(true);
+    }
+  }, [submittedModelUrl, isLoading]);
 
   const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    setIsDraggingOver(false);
+    // A brief timeout can help prevent flickering if dragging over child elements
+    setTimeout(() => {
+        const relatedTarget = event.relatedTarget as Node;
+        if (!event.currentTarget.contains(relatedTarget)) {
+            setIsDraggingOver(false);
+        }
+    }, 50);
   }, []);
 
 
@@ -245,7 +391,7 @@ export default function Home() {
     setIsLoading(false);
     if (!success) {
       setError(errorMessage || "Failed to load model.");
-      toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model (e.g., .glb, .gltf, .obj).", variant: "destructive" });
+      toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model.", variant: "destructive" });
       setModelHierarchy([]);
       setMaterialDetails([]);
       setHiddenMeshIds(new Set());
@@ -253,7 +399,6 @@ export default function Home() {
       setHasAnimations(false);
     } else {
       setError(null); 
-      // toast({ title: "Model Loaded", description: "Model loaded successfully." }); // Removed this line
     }
   }, [toast]);
 
@@ -324,17 +469,57 @@ export default function Home() {
     setIsExplorerCollapsed(prev => !prev);
   }, []);
 
-  const handleScreenshotTaken = useCallback((dataUrl: string) => {
-    const link = document.createElement('a');
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-    link.download = `Open3D_Capture_${timestamp}.png`;
-    link.href = dataUrl;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setRequestScreenshot(false); 
-    toast({ title: "Screenshot Captured", description: "Image downloaded successfully." });
+  const handleScreenshotTaken = useCallback(async (dataUrl: string) => {
+    if (typeof window !== 'undefined' && window.__TAURI_IPC__) {
+      try {
+        const { writeFile, createDir, exists } = await import('@tauri-apps/api/fs');
+        const { pictureDir, join } = await import('@tauri-apps/api/path');
+        
+        const picturesPath = await pictureDir();
+        const capturesDir = await join(picturesPath, 'Open3D_Captures');
+
+        if (!await exists(capturesDir)) {
+          await createDir(capturesDir, { recursive: true });
+        }
+        
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+        const fileName = `Open3D_Capture_${timestamp}.png`;
+        const filePath = await join(capturesDir, fileName);
+
+        const binaryData = base64ToUint8Array(dataUrl);
+        await writeFile({ path: filePath, contents: binaryData });
+
+        toast({ title: "Screenshot Saved", description: `Image saved to ${filePath}` });
+
+      } catch (e) {
+        console.error("Tauri screenshot save error:", e);
+        toast({ title: "Save Error", description: "Could not save screenshot via Tauri. " + (e instanceof Error ? e.message : String(e)), variant: "destructive" });
+        // Fallback to browser download if Tauri save fails
+        const link = document.createElement('a');
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+        link.download = `Open3D_Capture_${timestamp}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } finally {
+        setRequestScreenshot(false);
+      }
+    } else {
+      // Browser download fallback
+      const link = document.createElement('a');
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+      link.download = `Open3D_Capture_${timestamp}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setRequestScreenshot(false); 
+      toast({ title: "Screenshot Captured", description: "Image downloaded successfully." });
+    }
   }, [toast]);
 
   const handleObjectFocused = useCallback(() => {
@@ -640,6 +825,7 @@ export default function Home() {
                 className="hidden"
                 accept={acceptedFileTypes}
                 aria-label="3D Model File"
+                multiple // Allow multiple files for OBJ + MTL
             />
             {!submittedModelUrl && !isLoading && !error && (
                 <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
@@ -656,7 +842,10 @@ export default function Home() {
                         </div>
                         <p className="text-lg font-medium text-foreground mb-1">Drag & Drop or Click to Upload</p>
                         <p className="text-xs text-muted-foreground">
-                            Supported formats: .glb, .gltf, .obj
+                            Supported formats: .glb, .gltf, .obj (with .mtl & textures).
+                        </p>
+                         <p className="text-xs text-muted-foreground mt-1">
+                            For .obj, select the .obj, .mtl, and all texture files together.
                         </p>
                         <Button variant="link" size="sm" className="mt-2 text-accent invisible">
                           Or click to select a file
@@ -669,6 +858,7 @@ export default function Home() {
               <BabylonViewer
                   modelUrl={submittedModelUrl}
                   modelFileExtension={modelFileExtension}
+                  processedFiles={processedFiles}
                   onModelLoaded={handleModelLoaded}
                   onCameraReady={handleCameraReady}
                   onFpsUpdate={handleFpsUpdate}
@@ -784,6 +974,7 @@ export default function Home() {
                     <p className="text-muted-foreground text-center">{error}</p>
                     <p className="text-muted-foreground text-sm mt-2">
                         Please ensure the selected file is a valid 3D model (e.g., .glb, .gltf, .obj) and not corrupted.
+                         For .obj files, ensure you select the .obj, .mtl, and all texture files together.
                     </p>
                     <Button onClick={triggerFileDialog} variant="outline" size="sm" className="mt-6">
                         Try a different file
@@ -872,3 +1063,4 @@ export default function Home() {
     </div>
   );
 }
+
