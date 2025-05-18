@@ -441,7 +441,7 @@ export default function Home() {
     setTurntableProgress(0);
   }, [isRecordingTurntable, submittedModelUrl, isLoading, error, toast]);
 
-  const handleTurntableComplete = useCallback((framesDataUrls: string[]) => {
+  const handleTurntableComplete = useCallback(async (framesDataUrls: string[]) => {
     setIsRecordingTurntable(false);
     setRequestTurntableRecord(false);
     setTurntableProgress(100);
@@ -454,16 +454,20 @@ export default function Home() {
     const now = new Date();
     const timestampPrefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
 
-    framesDataUrls.forEach((dataUrl, index) => {
+    for (let i = 0; i < framesDataUrls.length; i++) {
+      const dataUrl = framesDataUrls[i];
       const link = document.createElement('a');
-      // Pad frame number for consistent sorting (e.g., 001, 002, ... 075)
-      const frameNumber = String(index + 1).padStart(3, '0');
+      const frameNumber = String(i + 1).padStart(3, '0');
       link.download = `Open3D_Turntable_${timestampPrefix}_Frame_${frameNumber}.png`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    });
+      // Add a small delay to allow the browser to process the download
+      if (i < framesDataUrls.length - 1) { 
+        await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay
+      }
+    }
     
     toast({ title: "Turntable Captured", description: `${framesDataUrls.length} frames downloaded as an image sequence.`, duration: 7000 });
   }, [toast]);
