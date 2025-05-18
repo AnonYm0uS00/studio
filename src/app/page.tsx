@@ -94,7 +94,6 @@ export default function Home() {
   const [isSoloActive, setIsSoloActive] = useState<boolean>(false);
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
   const acceptedFileTypes = ".glb,.gltf,.obj";
-  const [processedFiles, setProcessedFiles] = useState<File[] | null>(null);
 
 
   useEffect(() => {
@@ -151,8 +150,8 @@ export default function Home() {
     }
   }, [theme]); 
 
-  const processFiles = useCallback((filesToProcess: File[]) => {
-    if (!filesToProcess || filesToProcess.length === 0) {
+  const processFile = useCallback((file: File | null) => {
+    if (!file) {
       return;
     }
 
@@ -160,7 +159,6 @@ export default function Home() {
     setModelName(null);
     setModelFileExtension(null);
     setError(null);
-    // setIsLoading(true); // Moved down to specific cases
     setSubmittedModelUrl(null);
     setModelHierarchy([]);
     setMaterialDetails([]);
@@ -173,93 +171,38 @@ export default function Home() {
     setAnimationCurrentTimeSeconds(0);
     setRequestPlayAnimation(undefined);
     setRequestAnimationSeek(undefined);
-    setProcessedFiles(null); 
 
+    setSelectedFileName(file.name);
+    setModelName(file.name);
+    const nameParts = file.name.split('.');
+    const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
 
-    const objFile = filesToProcess.find(f => f.name.toLowerCase().endsWith('.obj'));
-
-    if (objFile && filesToProcess.length > 1) { // Multi-file OBJ case (OBJ + MTL + textures)
-        const mainFile = objFile;
-        setSelectedFileName(mainFile.name);
-        setModelName(mainFile.name);
-        const nameParts = mainFile.name.split('.');
-        const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
-        setModelFileExtension(ext);
-        setIsLoading(true);
-        setSubmittedModelUrl(`obj_multi_file_trigger:${mainFile.name}`); 
-        setProcessedFiles(filesToProcess);
-    } else if (filesToProcess.length === 1) { // Single file case (GLB, GLTF, or lone OBJ)
-        const file = filesToProcess[0];
-        setSelectedFileName(file.name);
-        setModelName(file.name);
-        const nameParts = file.name.split('.');
-        const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
-
-        if (!acceptedFileTypes.split(',').includes(ext)) {
-          toast({
-            title: "Invalid File Type",
-            description: `Please upload a supported file type: ${acceptedFileTypes}`,
-            variant: "destructive",
-          });
-          setIsLoading(false);
-          return;
-        }
-        setModelFileExtension(ext);
-        setIsLoading(true);
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          if (e.target?.result) {
-            setSubmittedModelUrl(e.target.result as string);
-          } else {
-            setError("Failed to read file.");
-            setIsLoading(false);
-          }
-        };
-        reader.onerror = () => {
-          setError("Error reading file.");
-          setIsLoading(false);
-        };
-        reader.readAsDataURL(file);
-    } else {
-        // Attempt to find the first valid single model file if multiple non-OBJ files are dropped
-        const firstValidFile = filesToProcess.find(f => {
-            const nameParts = f.name.split('.');
-            const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
-            return acceptedFileTypes.split(',').includes(ext);
-        });
-
-        if (firstValidFile) {
-            setSelectedFileName(firstValidFile.name);
-            setModelName(firstValidFile.name);
-            const nameParts = firstValidFile.name.split('.');
-            const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
-            setModelFileExtension(ext);
-            setIsLoading(true);
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              if (e.target?.result) {
-                setSubmittedModelUrl(e.target.result as string);
-              } else {
-                setError("Failed to read file.");
-                setIsLoading(false);
-              }
-            };
-            reader.onerror = () => {
-              setError("Error reading file.");
-              setIsLoading(false);
-            };
-            reader.readAsDataURL(firstValidFile);
-        } else if (filesToProcess.length > 0) { // If files were dropped but none are valid single types and not OBJ multi
-            toast({
-                title: "No Supported Model",
-                description: `Please drop a supported model file (${acceptedFileTypes}) or a set of OBJ+MTL+textures.`,
-                variant: "destructive",
-            });
-            setIsLoading(false);
-        }
-        // If no files or no valid files, it will effectively do nothing or show the above toast.
+    if (!acceptedFileTypes.split(',').includes(ext)) {
+      toast({
+        title: "Invalid File Type",
+        description: `Please upload a supported file type: ${acceptedFileTypes}`,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
     }
+    setModelFileExtension(ext);
+    setIsLoading(true);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setSubmittedModelUrl(e.target.result as string);
+      } else {
+        setError("Failed to read file.");
+        setIsLoading(false);
+      }
+    };
+    reader.onerror = () => {
+      setError("Error reading file.");
+      setIsLoading(false);
+    };
+    reader.readAsDataURL(file);
   }, [acceptedFileTypes, toast]);
 
 
@@ -271,11 +214,11 @@ export default function Home() {
       }
       return;
     }
-    processFiles(Array.from(files));
+    processFile(files[0]);
     if (event.target) {
       event.target.value = ""; 
     }
-  }, [processFiles]);
+  }, [processFile]);
 
   const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -283,10 +226,13 @@ export default function Home() {
     setIsDraggingOver(false);
 
     if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-      processFiles(Array.from(event.dataTransfer.files));
+      const droppedFile = event.dataTransfer.files[0]; // Process only the first dropped file
+      if (droppedFile) {
+        processFile(droppedFile);
+      }
       event.dataTransfer.clearData();
     }
-  }, [processFiles]);
+  }, [processFile]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.__TAURI_IPC__) {
@@ -301,27 +247,23 @@ export default function Home() {
             if (paths && paths.length > 0) {
               try {
                 setIsLoading(true);
-                const filesPromises = paths.map(async (filePath: string) => {
-                  const name = await basename(filePath);
-                  const binaryData = await readBinaryFile(filePath);
-                  let mimeType = 'application/octet-stream';
-                  const lowerName = name.toLowerCase();
-                  if (lowerName.endsWith('.glb')) mimeType = 'model/gltf-binary';
-                  else if (lowerName.endsWith('.gltf')) mimeType = 'model/gltf+json';
-                  else if (lowerName.endsWith('.obj')) mimeType = 'text/plain';
-                  else if (lowerName.endsWith('.mtl')) mimeType = 'text/plain';
-                  else if (lowerName.endsWith('.png')) mimeType = 'image/png';
-                  else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) mimeType = 'image/jpeg';
-                  return new File([binaryData], name, { type: mimeType });
-                });
-                const files = await Promise.all(filesPromises);
-                processFiles(files);
+                const filePath = paths[0]; // Process only the first dropped file path
+                const name = await basename(filePath);
+                const binaryData = await readBinaryFile(filePath);
+                let mimeType = 'application/octet-stream';
+                const lowerName = name.toLowerCase();
+                if (lowerName.endsWith('.glb')) mimeType = 'model/gltf-binary';
+                else if (lowerName.endsWith('.gltf')) mimeType = 'model/gltf+json';
+                else if (lowerName.endsWith('.obj')) mimeType = 'text/plain'; // Or 'model/obj' - but text/plain is safer for DataURL
+                // Add other MIME types as needed, but MTL specific loading is removed
+                const file = new File([binaryData], name, { type: mimeType });
+                processFile(file);
               } catch (err) {
                 console.error("Tauri file drop processing error:", err);
-                setError("Failed to process dropped files via Tauri.");
+                setError("Failed to process dropped file via Tauri.");
                 toast({
                   title: "File Drop Error",
-                  description: "Could not process the dropped files. " + (err instanceof Error ? err.message : String(err)),
+                  description: "Could not process the dropped file. " + (err instanceof Error ? err.message : String(err)),
                   variant: "destructive",
                 });
                 setIsLoading(false);
@@ -347,7 +289,6 @@ export default function Home() {
           };
         } catch (e) {
             console.warn("Failed to set up Tauri listeners. Running in browser mode or Tauri API not available.", e);
-            // Fallback to browser behavior, no specific action needed here for listeners
         }
       };
       
@@ -364,12 +305,12 @@ export default function Home() {
         }
       };
     }
-  }, [processFiles, submittedModelUrl, isLoading, toast]); // Added isLoading and toast to dependencies
+  }, [processFile, submittedModelUrl, isLoading, toast]);
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!submittedModelUrl && !isLoading) { // Only show drag over effect if drop zone is active
+    if (!submittedModelUrl && !isLoading) {
         setIsDraggingOver(true);
     }
   }, [submittedModelUrl, isLoading]);
@@ -377,7 +318,6 @@ export default function Home() {
   const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    // A brief timeout can help prevent flickering if dragging over child elements
     setTimeout(() => {
         const relatedTarget = event.relatedTarget as Node;
         if (!event.currentTarget.contains(relatedTarget)) {
@@ -391,7 +331,8 @@ export default function Home() {
     setIsLoading(false);
     if (!success) {
       setError(errorMessage || "Failed to load model.");
-      toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model.", variant: "destructive" });
+      // Toast removed for model loaded successfully.
+      // toast({ title: "Load Error", description: errorMessage || "Failed to load model. Ensure the file is a valid 3D model.", variant: "destructive" });
       setModelHierarchy([]);
       setMaterialDetails([]);
       setHiddenMeshIds(new Set());
@@ -400,7 +341,7 @@ export default function Home() {
     } else {
       setError(null); 
     }
-  }, [toast]);
+  }, []);
 
   const handleCameraReady = useCallback((camera: ArcRotateCamera) => {
     cameraRef.current = camera;
@@ -495,7 +436,6 @@ export default function Home() {
       } catch (e) {
         console.error("Tauri screenshot save error:", e);
         toast({ title: "Save Error", description: "Could not save screenshot via Tauri. " + (e instanceof Error ? e.message : String(e)), variant: "destructive" });
-        // Fallback to browser download if Tauri save fails
         const link = document.createElement('a');
         const now = new Date();
         const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
@@ -508,7 +448,6 @@ export default function Home() {
         setRequestScreenshot(false);
       }
     } else {
-      // Browser download fallback
       const link = document.createElement('a');
       const now = new Date();
       const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
@@ -825,7 +764,6 @@ export default function Home() {
                 className="hidden"
                 accept={acceptedFileTypes}
                 aria-label="3D Model File"
-                multiple // Allow multiple files for OBJ + MTL
             />
             {!submittedModelUrl && !isLoading && !error && (
                 <div className="absolute inset-0 flex items-center justify-center p-4 bg-background">
@@ -842,10 +780,7 @@ export default function Home() {
                         </div>
                         <p className="text-lg font-medium text-foreground mb-1">Drag & Drop or Click to Upload</p>
                         <p className="text-xs text-muted-foreground">
-                            Supported formats: .glb, .gltf, .obj (with .mtl & textures).
-                        </p>
-                         <p className="text-xs text-muted-foreground mt-1">
-                            For .obj, select the .obj, .mtl, and all texture files together.
+                            Supported formats: .glb, .gltf, .obj.
                         </p>
                         <Button variant="link" size="sm" className="mt-2 text-accent invisible">
                           Or click to select a file
@@ -858,7 +793,6 @@ export default function Home() {
               <BabylonViewer
                   modelUrl={submittedModelUrl}
                   modelFileExtension={modelFileExtension}
-                  processedFiles={processedFiles}
                   onModelLoaded={handleModelLoaded}
                   onCameraReady={handleCameraReady}
                   onFpsUpdate={handleFpsUpdate}
@@ -974,7 +908,6 @@ export default function Home() {
                     <p className="text-muted-foreground text-center">{error}</p>
                     <p className="text-muted-foreground text-sm mt-2">
                         Please ensure the selected file is a valid 3D model (e.g., .glb, .gltf, .obj) and not corrupted.
-                         For .obj files, ensure you select the .obj, .mtl, and all texture files together.
                     </p>
                     <Button onClick={triggerFileDialog} variant="outline" size="sm" className="mt-6">
                         Try a different file
@@ -1056,7 +989,6 @@ export default function Home() {
             )}
         </main>
       </div>
-      {/* Footer for version */}
       <footer className="h-10 flex-shrink-0 border-t border-border bg-card flex items-center px-4 text-sm text-muted-foreground justify-start shadow-sm">
         <p>Version: 0.2.0</p>
       </footer>
