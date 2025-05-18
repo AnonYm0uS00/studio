@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle, GithubIcon, VideoIcon } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle, GithubIcon } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode, MaterialDetail } from '@/components/types';
@@ -93,11 +93,6 @@ export default function Home() {
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
   const acceptedFileTypes = ".glb,.gltf,.obj";
 
-  // Turntable recording state
-  const [isRecordingTurntable, setIsRecordingTurntable] = useState<boolean>(false);
-  const [turntableProgress, setTurntableProgress] = useState<number>(0);
-  const [requestTurntableRecord, setRequestTurntableRecord] = useState<boolean>(false);
-
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("theme") as Theme | null;
@@ -177,9 +172,6 @@ export default function Home() {
     setAnimationCurrentTimeSeconds(0);
     setRequestPlayAnimation(undefined);
     setRequestAnimationSeek(undefined);
-    setIsRecordingTurntable(false);
-    setRequestTurntableRecord(false);
-    setTurntableProgress(0);
 
 
     const reader = new FileReader();
@@ -282,12 +274,8 @@ export default function Home() {
 
 
   const triggerFileDialog = useCallback(() => {
-    if (isRecordingTurntable) {
-      toast({ title: "Recording in Progress", description: "Please wait for the turntable recording to finish.", variant: "default" });
-      return;
-    }
     fileInputRef.current?.click();
-  }, [isRecordingTurntable, toast]);
+  }, []);
 
   const handleAnimationsAvailable = useCallback((available: boolean, duration: number) => {
     setHasAnimations(available);
@@ -312,19 +300,17 @@ export default function Home() {
   }, []);
 
   const handlePlayPauseToggle = useCallback(() => {
-    if (isRecordingTurntable) return;
     const newPlayState = !isPlayingAnimation;
     setIsPlayingAnimation(newPlayState);
     setRequestPlayAnimation(newPlayState);
-  }, [isPlayingAnimation, isRecordingTurntable]);
+  }, [isPlayingAnimation]);
 
   const handleAnimationSliderChange = useCallback((value: number[]) => {
-    if (isRecordingTurntable) return;
     const newProgress = value[0];
     setAnimationProgress(newProgress);
     setRequestAnimationSeek(newProgress);
     setRequestPlayAnimation(isPlayingAnimation); 
-  }, [isPlayingAnimation, isRecordingTurntable]);
+  }, [isPlayingAnimation]);
 
   const formatTime = (timeInSeconds: number): string => {
     const totalSeconds = Math.floor(timeInSeconds);
@@ -391,19 +377,19 @@ export default function Home() {
     
     if (event.altKey && event.key.toLowerCase() === 'g') {
       event.preventDefault();
-      if (!isRecordingTurntable) setIsGridVisible(prev => !prev);
+      setIsGridVisible(prev => !prev);
     } else if (event.ctrlKey && event.key.toLowerCase() === 'n') {
       event.preventDefault();
       triggerFileDialog();
     } else if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'f') {
       event.preventDefault();
-      if (submittedModelUrl && !isLoading && !error && !isRecordingTurntable) {
+      if (submittedModelUrl && !isLoading && !error) {
         setRequestFocusObject(true);
       }
     } else if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'e') {
       event.preventDefault();
       toggleExplorerPanel();
-    } else if (!event.ctrlKey && !event.altKey && !event.metaKey && !isRecordingTurntable) { 
+    } else if (!event.ctrlKey && !event.altKey && !event.metaKey ) { 
         switch (event.key) {
             case '1':
                 event.preventDefault();
@@ -421,7 +407,7 @@ export default function Home() {
                 break;
         }
     }
-  }, [triggerFileDialog, submittedModelUrl, isLoading, error, toggleExplorerPanel, isRecordingTurntable, setIsGridVisible, setRequestFocusObject, setRenderingMode]); 
+  }, [triggerFileDialog, submittedModelUrl, isLoading, error, toggleExplorerPanel, setIsGridVisible, setRequestFocusObject, setRenderingMode]); 
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -429,48 +415,6 @@ export default function Home() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleKeyDown]); 
-
-  const handleTurntableRecordClick = useCallback(() => {
-    if (isRecordingTurntable) return;
-    if (!submittedModelUrl || isLoading || error) {
-      toast({ title: "No Model Loaded", description: "Please load a model before recording a turntable.", variant: "destructive"});
-      return;
-    }
-    setRequestTurntableRecord(true);
-    setIsRecordingTurntable(true);
-    setTurntableProgress(0);
-  }, [isRecordingTurntable, submittedModelUrl, isLoading, error, toast]);
-
-  const handleTurntableComplete = useCallback(async (framesDataUrls: string[]) => {
-    setIsRecordingTurntable(false);
-    setRequestTurntableRecord(false);
-    setTurntableProgress(100);
-
-    if (framesDataUrls.length === 0) {
-      toast({ title: "Turntable Capture Failed", description: "No frames were captured.", variant: "destructive", duration: 5000 });
-      return;
-    }
-
-    const now = new Date();
-    const timestampPrefix = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-
-    for (let i = 0; i < framesDataUrls.length; i++) {
-      const dataUrl = framesDataUrls[i];
-      const link = document.createElement('a');
-      const frameNumber = String(i + 1).padStart(3, '0');
-      link.download = `Open3D_Turntable_${timestampPrefix}_Frame_${frameNumber}.png`;
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      // Add a small delay to allow the browser to process the download
-      if (i < framesDataUrls.length - 1) { 
-        await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay
-      }
-    }
-    
-    toast({ title: "Turntable Captured", description: `${framesDataUrls.length} frames downloaded as an image sequence.`, duration: 7000 });
-  }, [toast]);
 
 
   return (
@@ -486,7 +430,6 @@ export default function Home() {
             className="text-muted-foreground hover:text-accent-foreground h-8 w-8"
             onClick={triggerFileDialog}
             title="Open new file (Ctrl+N)"
-            disabled={isRecordingTurntable}
           >
             <FileText className="h-4 w-4" />
             <span className="sr-only">Open File</span>
@@ -494,7 +437,7 @@ export default function Home() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Settings" disabled={isRecordingTurntable}>
+              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Settings">
                 <Settings className="h-4 w-4" />
                 <span className="sr-only">Settings</span>
               </Button>
@@ -736,9 +679,6 @@ export default function Home() {
                   requestFocusObject={requestFocusObject}
                   onObjectFocused={handleObjectFocused}
                   hiddenMeshIds={hiddenMeshIds}
-                  recordTurntableTrigger={requestTurntableRecord}
-                  onTurntableProgressUpdate={setTurntableProgress}
-                  onTurntableComplete={handleTurntableComplete}
               />
             )}
             
@@ -748,52 +688,38 @@ export default function Home() {
                   <Button
                     variant={isGridVisible ? "secondary" : "outline"}
                     size="icon"
-                    onClick={() => !isRecordingTurntable && setIsGridVisible(!isGridVisible)}
+                    onClick={() => setIsGridVisible(!isGridVisible)}
                     title="Toggle Grid (Alt+G)"
                     className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                    disabled={isRecordingTurntable}
                   >
                     <Grid className="h-4 w-4" />
                   </Button>
                   <Button
                     variant={isAutoRotating ? "secondary" : "outline"}
                     size="icon"
-                    onClick={() => !isRecordingTurntable && setIsAutoRotating(!isAutoRotating)}
+                    onClick={() => setIsAutoRotating(!isAutoRotating)}
                     title={isAutoRotating ? "Stop Auto-Rotation" : "Start Auto-Rotation"}
                     className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                    disabled={isRecordingTurntable}
                   >
                     <RotateCw className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => !isRecordingTurntable && setRequestScreenshot(true)}
+                    onClick={() => setRequestScreenshot(true)}
                     title="Capture Screenshot"
                     className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                    disabled={isRecordingTurntable}
                   >
                     <Camera className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => !isRecordingTurntable && setRequestFocusObject(true)}
+                    onClick={() => setRequestFocusObject(true)}
                     title="Focus on Object (F)"
                     className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                    disabled={isRecordingTurntable}
                   >
                     <Focus className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleTurntableRecordClick}
-                    title="Record Turntable Animation"
-                    className="h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80"
-                    disabled={isRecordingTurntable}
-                  >
-                    <VideoIcon className="h-4 w-4" />
                   </Button>
                 </div>
 
@@ -839,16 +765,6 @@ export default function Home() {
                 </div>
             )}
 
-            {isRecordingTurntable && (
-              <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-30">
-                <div className="flex flex-col items-center bg-card p-8 rounded-lg shadow-xl">
-                  <VideoIcon className="animate-pulse h-10 w-10 text-primary mb-3" />
-                  <p className="text-foreground text-lg">Recording Turntable...</p>
-                  <p className="text-muted-foreground text-sm">Progress: {turntableProgress.toFixed(0)}%</p>
-                </div>
-              </div>
-            )}
-
             {!isLoading && error && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-20 p-4">
                   <div className="bg-card p-8 rounded-lg shadow-xl text-center max-w-md">
@@ -873,30 +789,27 @@ export default function Home() {
                     <Button
                       variant={renderingMode === 'shaded' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => !isRecordingTurntable && setRenderingMode('shaded')}
+                      onClick={() => setRenderingMode('shaded')}
                       className="text-xs h-7 px-2"
                       title="Shaded (1)"
-                      disabled={isRecordingTurntable}
                     >
                       Shaded
                     </Button>
                     <Button
                       variant={renderingMode === 'non-shaded' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => !isRecordingTurntable && setRenderingMode('non-shaded')}
+                      onClick={() => setRenderingMode('non-shaded')}
                       className="text-xs h-7 px-2"
                        title="Non-Shaded (2)"
-                       disabled={isRecordingTurntable}
                     >
                       Non-Shaded
                     </Button>
                     <Button
                       variant={renderingMode === 'wireframe' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => !isRecordingTurntable && setRenderingMode('wireframe')}
+                      onClick={() => setRenderingMode('wireframe')}
                       className="text-xs h-7 px-2"
                       title="Wireframe (3)"
-                      disabled={isRecordingTurntable}
                     >
                       Wireframe
                     </Button>
@@ -906,41 +819,35 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Bottom-Center Controls: Animations / Turntable Progress */}
-                {(hasAnimations || isRecordingTurntable) && (
+                {/* Bottom-Center Controls: Animations */}
+                {hasAnimations && (
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2 p-2 bg-card/70 backdrop-blur-md rounded-md border border-border shadow-md w-80">
-                    {isRecordingTurntable ? (
-                        <div className="text-sm text-foreground">
-                          Recording: {turntableProgress.toFixed(0)}%
-                        </div>
-                    ) : hasAnimations ? (
-                      <>
-                        <div className="flex items-center gap-2 w-full">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handlePlayPauseToggle}
-                            className="h-7 w-7 text-foreground"
-                            title={isPlayingAnimation ? "Pause Animation" : "Play Animation"}
-                          >
-                            {isPlayingAnimation ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                          </Button>
-                          <Slider
-                            value={[animationProgress]}
-                            onValueChange={handleAnimationSliderChange}
-                            min={0}
-                            max={100}
-                            step={0.1}
-                            className="flex-grow"
-                            aria-label="Animation progress"
-                          />
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          <TimerIcon className="inline h-3 w-3 mr-1" />
-                          {formatTime(animationCurrentTimeSeconds)} / {formatTime(animationDurationSeconds)}
-                        </div>
-                      </>
-                    ) : null}
+                    <>
+                      <div className="flex items-center gap-2 w-full">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={handlePlayPauseToggle}
+                          className="h-7 w-7 text-foreground"
+                          title={isPlayingAnimation ? "Pause Animation" : "Play Animation"}
+                        >
+                          {isPlayingAnimation ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                        </Button>
+                        <Slider
+                          value={[animationProgress]}
+                          onValueChange={handleAnimationSliderChange}
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          className="flex-grow"
+                          aria-label="Animation progress"
+                        />
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        <TimerIcon className="inline h-3 w-3 mr-1" />
+                        {formatTime(animationCurrentTimeSeconds)} / {formatTime(animationDurationSeconds)}
+                      </div>
+                    </>
                   </div>
                 )}
               </>
@@ -954,4 +861,3 @@ export default function Home() {
     </div>
   );
 }
-
