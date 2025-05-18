@@ -281,7 +281,7 @@ export default function Home() {
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       {/* Top Bar */}
       <header className="h-12 flex-shrink-0 border-b border-border bg-card/70 backdrop-blur-md flex items-center px-4 justify-between shadow-md">
-        <h1 className="text-lg font-semibold text-primary">3D Viewer</h1>
+        <h1 className="text-lg font-semibold text-primary">Open3D Viewer</h1>
         <div className="text-sm text-muted-foreground">{modelName || "No model loaded"}</div>
         <div className="flex items-center gap-2">
           <Button 
@@ -676,3 +676,4 @@ export default function Home() {
     </div>
   );
 }
+
