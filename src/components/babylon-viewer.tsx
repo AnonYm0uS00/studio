@@ -23,7 +23,7 @@ import {
   Mesh,
   AnimationGroup,
   Tools,
-  Texture, // Added for explicit samplingMode access if needed, though not used now
+  Texture,
 } from '@babylonjs/core';
 import { GridMaterial } from '@babylonjs/materials';
 import '@babylonjs/loaders/glTF';
@@ -60,7 +60,7 @@ interface BabylonViewerProps {
 }
 
 const isHelperNodeByName = (nodeName: string): boolean => {
-  const helperNodeNames = ["camera", "light1", "light2", "grid", "BackgroundPlane", "BackgroundSkybox"];
+  const helperNodeNames = ["camera", "light1", "light2", "grid", "BackgroundPlane", "BackgroundSkybox", "hdrSkyBox"];
   return helperNodeNames.includes(nodeName);
 };
 
@@ -112,19 +112,28 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     camera.alpha = -Math.PI / 2;
     camera.beta = Math.PI / 2.5;
     
+    // Dispose of old environment texture if it exists
     const currentEnv = scene.environmentTexture;
     if (currentEnv) {
         currentEnv.dispose();
         scene.environmentTexture = null;
     }
+    // Dispose of old skybox mesh if it exists (Babylon's default environment might create one named 'hdrSkyBox')
+    const oldSkybox = scene.getMeshByName("hdrSkyBox");
+    if (oldSkybox) {
+        oldSkybox.dispose();
+    }
     
     scene.createDefaultEnvironment({ 
-        createSkybox: false, // Ensure solid background color is visible
-        createGround: false, // We have our own grid
+        createSkybox: true, 
+        createGround: false,
         skyboxSize: 150, 
         enableGroundShadow: false, 
     });
     scene.environmentIntensity = 1.0;
+    if (scene.environmentTexture) {
+      // scene.environmentTexture.samplingMode = Texture.TRILINEAR_SAMPLINGMODE; // This caused errors, getter only
+    }
 
     if (effectiveTheme === 'light') {
       scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
@@ -140,39 +149,34 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
 
   const applyRenderingModeStyle = useCallback((newRenderingMode: RenderingMode, container: Nullable<AssetContainer>, currentModelFileExtension: string | null) => {
-    if (currentModelFileExtension === '.obj') { // Skip OBJ for rendering modes
+    if (currentModelFileExtension === '.obj') { 
       return;
     }
     if (!container || !sceneRef.current) return;
 
     const processSingleMaterial = (mat: Material) => {
-      // Reset common properties first
-      mat.wireframe = false;
-      mat.alpha = 1.0; // Ensure opaque by default unless material specifically has alpha
+      // Only adjust properties relevant to the rendering modes: wireframe, unlit/disableLighting
+      // Do NOT touch mat.alpha, transparencyMode, useAlphaFromAlbedoTexture etc. here.
+      // Those are handled by the GLTF loader and the specific transparency setup loop.
+
+      mat.wireframe = false; // Default for shaded/non-shaded
 
       if (mat instanceof PBRMaterial) {
-        mat.unlit = false;
-         if (mat.albedoTexture && mat.albedoTexture.hasAlpha && mat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) {
-            mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
-        } else if (mat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) {
-            // mat.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE; // Keep original or let GLTF loader decide
-        }
-        mat.useAlphaFromAlbedoTexture = !!(mat.albedoTexture && mat.albedoTexture.hasAlpha);
+        mat.unlit = false; // Default for shaded
       } else if (mat instanceof StandardMaterial) {
-        mat.disableLighting = false;
-         if (mat.diffuseTexture && mat.diffuseTexture.hasAlpha) {
-           mat.useAlphaFromDiffuseTexture = true;
-         }
+        mat.disableLighting = false; // Default for shaded
       }
 
       // Apply specific mode
       switch (newRenderingMode) {
         case 'shaded':
-          // Defaults handled by reset, PBR unlit=false, Standard disableLighting=false
+          // PBR unlit=false, Standard disableLighting=false, wireframe=false
+          // Defaults set above cover this.
           break;
         case 'non-shaded':
           if (mat instanceof PBRMaterial) mat.unlit = true;
           else if (mat instanceof StandardMaterial) mat.disableLighting = true;
+          // wireframe remains false
           break;
         case 'wireframe':
           mat.wireframe = true;
@@ -232,7 +236,16 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     ground.isPickable = false;
     ground.position.y = 0;
 
-    internalResetCameraAndEnvironment(); // Sets up initial environment and clear color
+    // Initial environment and clear color handled by internalResetCameraAndEnvironment or theme effect
+    // For initial scene setup, ensure clearColor based on theme.
+    if (effectiveTheme === 'light') {
+      scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
+    } else {
+      scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
+    }
+    scene.createDefaultEnvironment({ createSkybox: true, createGround: false, skyboxSize: 150, enableGroundShadow: false });
+    scene.environmentIntensity = 1.0;
+
 
     engine.runRenderLoop(() => {
       if (sceneRef.current) {
@@ -268,6 +281,8 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
 
         const envTex = sceneRef.current.environmentTexture;
         if (envTex) envTex.dispose();
+        const skyBox = sceneRef.current.getMeshByName("hdrSkyBox"); // Default name for environment skybox
+        if (skyBox) skyBox.dispose();
                 
         sceneRef.current.dispose();
         sceneRef.current = null;
@@ -279,7 +294,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
       cameraRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onCameraReady, onFpsUpdate]); // internalResetCameraAndEnvironment removed as it's stable and uses effectiveTheme from props
+  }, [onCameraReady, effectiveTheme]); // Added effectiveTheme for initial clearColor
 
 
   // Effect for scene.onBeforeRenderObservable (auto-rotate, animation progress)
@@ -293,7 +308,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     }
     
     const observer = scene.onBeforeRenderObservable.add(() => {
-        if (isAutoRotating && cameraRef.current) {
+        if (isAutoRotating && cameraRef.current && loadedAssetContainerRef.current) { // only rotate if model loaded
           cameraRef.current.alpha += 0.005; 
         }
 
@@ -355,7 +370,7 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
         scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);   
       }
     }
-  }, [effectiveTheme, sceneRef]);
+  }, [effectiveTheme]);
 
 
   // Effect for loading the model
@@ -399,39 +414,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             oldEnv.dispose();
             scene.environmentTexture = null;
         }
+        const oldSkybox = scene.getMeshByName("hdrSkyBox");
+        if (oldSkybox) {
+            oldSkybox.dispose();
+        }
         
         container.addAllToScene();
-
-        container.materials.forEach(mat => {
-            const processMaterialForCullingAndTransparency = (materialInstance: Material) => {
-                materialInstance.backFaceCulling = false;
-                if (materialInstance instanceof PBRMaterial) {
-                    const pbrMat = materialInstance as PBRMaterial;
-                    if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
-                        if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST && pbrMat.alphaMode !== Engine.ALPHA_COMBINE) {
-                            pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
-                        }
-                        pbrMat.useAlphaFromAlbedoTexture = true;
-                    } else if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST && pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHABLEND) {
-                         pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
-                    }
-                } else if (materialInstance instanceof StandardMaterial) {
-                    const stdMat = materialInstance as StandardMaterial;
-                    if (stdMat.diffuseTexture && stdMat.diffuseTexture.hasAlpha) {
-                        stdMat.useAlphaFromDiffuseTexture = true;
-                        // Potentially set alpha mode for standard materials if needed, though less common for GLTF
-                    }
-                }
-            };
-
-            if (mat instanceof MultiMaterial) {
-                mat.subMaterials.forEach(subMat => {
-                    if (subMat) processMaterialForCullingAndTransparency(subMat);
-                });
-            } else {
-                processMaterialForCullingAndTransparency(mat);
-            }
-        });
         
         const allModelMeshes = container.meshes.filter(m => !isHelperNodeByName(m.name) && !(m instanceof HemisphericLight) && !(m instanceof ArcRotateCamera));
         
@@ -458,40 +446,58 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                         grid.position.y = modelBoundingMin.y - 0.01; 
                     }
                     scene.createDefaultEnvironment({
-                        createSkybox: false, // Keep solid background
-                        createGround: false, // We have our own grid
+                        createSkybox: true, 
+                        createGround: false,
                         skyboxSize: Math.max(150, (modelBoundingMax.subtract(modelBoundingMin)).length() * 2),
                         enableGroundShadow: false,
                     });
                     scene.environmentIntensity = 1.0;
-                     if (effectiveTheme === 'light') { // Re-apply clear color after potential environment changes
-                        scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
-                    } else { 
-                        scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
-                    }
-                } else {
+
+                } else { // No valid bounds found from meshes
                     internalResetCameraAndEnvironment();
                 }
-            } else {
+            } else { // No visible/enabled meshes
                 internalResetCameraAndEnvironment();
             }
-        } else {
+        } else { // No meshes in the container (empty model)
             internalResetCameraAndEnvironment();
         }
         
-        applyRenderingModeStyle(renderingMode, container, modelFileExtension); 
+        // Apply initial rendering mode
+        applyRenderingModeStyle(renderingMode, container, modelFileExtension);
 
-        // Re-apply transparency settings after rendering mode style, just in case
+        // Explicitly set material properties that might be lost or need reinforcement
         container.materials.forEach(mat => {
-            if (mat instanceof PBRMaterial) {
-                const pbrMat = mat as PBRMaterial;
-                if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
-                    // Only override if not already ALPHATEST (for alpha masking)
-                    if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) {
-                         pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+            const processMaterialForCullingAndTransparency = (materialInstance: Material) => {
+                materialInstance.backFaceCulling = false;
+
+                if (materialInstance instanceof PBRMaterial) {
+                    const pbrMat = materialInstance as PBRMaterial;
+                    // If albedo texture has alpha, enable alpha blending if not already alpha test.
+                    if (pbrMat.albedoTexture && pbrMat.albedoTexture.hasAlpha) {
+                        pbrMat.useAlphaFromAlbedoTexture = true;
+                        if (pbrMat.transparencyMode !== PBRMaterial.PBRMATERIAL_ALPHATEST) { // Only if not MASK
+                           pbrMat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+                        }
                     }
-                    pbrMat.useAlphaFromAlbedoTexture = true;
+                    // If material.alpha < 1 (set by GLTF loader based on baseColorFactor alpha),
+                    // the loader should have set transparencyMode to ALPHABLEND. We don't override that.
+                } else if (materialInstance instanceof StandardMaterial) {
+                    const stdMat = materialInstance as StandardMaterial;
+                    if (stdMat.diffuseTexture && stdMat.diffuseTexture.hasAlpha) {
+                        stdMat.useAlphaFromDiffuseTexture = true;
+                        // StandardMaterial uses material.alpha directly for blend opacity.
+                        // GLTF loader should set stdMat.alpha if baseColorFactor alpha < 1
+                    }
                 }
+            };
+
+            if (mat instanceof MultiMaterial) {
+                mat.subMaterials.forEach(subMat => {
+                    if (subMat) processMaterialForCullingAndTransparency(subMat);
+                });
+            } else {
+                processMaterialForCullingAndTransparency(mat);
             }
         });
         
@@ -571,6 +577,12 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
                 onAnimationsAvailable(false, 0);
             }
         }
+        // Re-apply clear color after model loading and potential environment changes
+        if (effectiveTheme === 'light') {
+          scene.clearColor = new Color4(240 / 255, 240 / 255, 240 / 255, 1);
+        } else {
+          scene.clearColor = new Color4(38 / 255, 38 / 255, 38 / 255, 1);
+        }
 
       })
       .catch(error => {
@@ -610,11 +622,9 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
     onMaterialsReady, 
     onAnimationsAvailable,
     internalResetCameraAndEnvironment,
-    // applyRenderingModeStyle - this should be stable
-    effectiveTheme, // For re-applying clearColor
-    // renderingMode - Handled by separate effect
-    sceneRef, 
-    cameraRef 
+    applyRenderingModeStyle, // Added back as it's called here
+    renderingMode,          // Added back as it's used by applyRenderingModeStyle
+    effectiveTheme          // Added for re-applying clearColor
   ]);
 
   // Effect for applying rendering mode when it changes
@@ -731,9 +741,13 @@ export const BabylonViewer: React.FC<BabylonViewerProps> = ({
             oldEnv.dispose();
             scene.environmentTexture = null;
           }
+           const oldSkybox = scene.getMeshByName("hdrSkyBox");
+            if (oldSkybox) {
+                oldSkybox.dispose();
+            }
           scene.createDefaultEnvironment({
-            createSkybox: false, // Keep solid background
-            createGround: false, // We have our own grid
+            createSkybox: true, 
+            createGround: false,
             skyboxSize: Math.max(150, (modelBoundingMax.subtract(modelBoundingMin)).length() * 2),
             enableGroundShadow: false,
           });
