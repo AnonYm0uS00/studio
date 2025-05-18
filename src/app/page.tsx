@@ -181,13 +181,13 @@ export default function Home() {
       } else {
         setError("Failed to read file.");
         setIsLoading(false);
-        toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
+        // toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
       }
     };
     reader.onerror = () => {
       setError("Error reading file.");
       setIsLoading(false);
-      toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
+      // toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
     };
     reader.readAsDataURL(file);
   }, [toast]);
@@ -253,6 +253,7 @@ export default function Home() {
       setHasAnimations(false);
     } else {
       setError(null); 
+      // toast({ title: "Model Loaded", description: "Model loaded successfully." }); // Removed this line
     }
   }, [toast]);
 
@@ -415,6 +416,16 @@ export default function Home() {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleKeyDown]); 
+
+  useEffect(() => {
+    const handleContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('contextmenu', handleContextMenu);
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
 
 
   return (
