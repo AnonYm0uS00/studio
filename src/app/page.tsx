@@ -121,53 +121,56 @@ export default function Home() {
 
   const handleFileSelected = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFileName(file.name);
-      setModelName(file.name); 
-
-      const nameParts = file.name.split('.');
-      const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
-      setModelFileExtension(ext);
-
-      setError(null);
-      setIsLoading(true);
-      setSubmittedModelUrl(null); 
-      setModelHierarchy([]); 
-      setMaterialDetails([]);
-      // Reset animation states
-      setHasAnimations(false);
-      setIsPlayingAnimation(false);
-      setAnimationProgress(0);
-      setAnimationDurationSeconds(0);
-      setAnimationCurrentTimeSeconds(0);
-      setRequestPlayAnimation(undefined);
-      setRequestAnimationSeek(undefined);
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          setSubmittedModelUrl(e.target.result as string);
-        } else {
-          setError("Failed to read file.");
-          setIsLoading(false);
-          toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
-        }
-      };
-      reader.onerror = () => {
-        setError("Error reading file.");
-        setIsLoading(false);
-        toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setSelectedFileName(null);
-      setSubmittedModelUrl(null);
-      setModelFileExtension(null);
-      setModelName(null);
-      setModelHierarchy([]);
-      setMaterialDetails([]);
-      setHasAnimations(false);
+    if (!file) { // If no file is selected (e.g., user cancels dialog), do nothing
+      if (event.target) { // Reset file input value to allow re-selecting the same file
+        event.target.value = "";
+      }
+      return;
     }
+
+    setSelectedFileName(file.name);
+    setModelName(file.name); 
+
+    const nameParts = file.name.split('.');
+    const ext = nameParts.length > 1 ? `.${nameParts.pop()?.toLowerCase()}` : '';
+    setModelFileExtension(ext);
+
+    setError(null);
+    setIsLoading(true);
+    setSubmittedModelUrl(null); 
+    setModelHierarchy([]); 
+    setMaterialDetails([]);
+    // Reset animation states
+    setHasAnimations(false);
+    setIsPlayingAnimation(false);
+    setAnimationProgress(0);
+    setAnimationDurationSeconds(0);
+    setAnimationCurrentTimeSeconds(0);
+    setRequestPlayAnimation(undefined);
+    setRequestAnimationSeek(undefined);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setSubmittedModelUrl(e.target.result as string);
+      } else {
+        setError("Failed to read file.");
+        setIsLoading(false);
+        toast({ title: "Error", description: "Could not read the selected file.", variant: "destructive" });
+      }
+       if (event.target) { // Reset file input value
+        event.target.value = "";
+      }
+    };
+    reader.onerror = () => {
+      setError("Error reading file.");
+      setIsLoading(false);
+      toast({ title: "Error", description: "An error occurred while reading the file.", variant: "destructive" });
+       if (event.target) { // Reset file input value
+        event.target.value = "";
+      }
+    };
+    reader.readAsDataURL(file);
   }, [toast]);
 
   const handleModelLoaded = useCallback((success: boolean, errorMessage?: string) => {
@@ -236,6 +239,8 @@ export default function Home() {
     const newProgress = value[0];
     setAnimationProgress(newProgress);
     setRequestAnimationSeek(newProgress);
+    // If the user was playing, keep playing, otherwise stay paused.
+    // This prevents the animation from auto-playing when slider is moved while paused.
     setRequestPlayAnimation(isPlayingAnimation); 
   }, [isPlayingAnimation]);
 
@@ -613,5 +618,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
