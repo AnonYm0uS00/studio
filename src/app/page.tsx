@@ -5,7 +5,7 @@ import type { ArcRotateCamera } from '@babylonjs/core';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { BabylonViewer } from '@/components/babylon-viewer';
-import { AlertTriangle, UploadCloud, FileText, Settings, InfoIcon, PackageIcon, Sun, Moon, Laptop, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, GithubIcon, Camera, Focus, Eye, EyeOff } from 'lucide-react';
+import { AlertTriangle, UploadCloud, FileText, Settings, GithubIcon, Camera, Focus, Grid, RotateCw, PanelLeftClose, PanelLeftOpen, Play, Pause, TimerIcon, Sun, Moon, Laptop, PackageIcon, HelpCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ModelNode, MaterialDetail } from '@/components/types';
@@ -23,6 +23,7 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 
 type Theme = "light" | "dark" | "system";
@@ -330,7 +331,6 @@ export default function Home() {
   }, [modelHierarchy, isSoloActive]);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    // Check if focus is on an input element, if so, don't trigger shortcuts
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return;
     }
@@ -343,7 +343,6 @@ export default function Home() {
       triggerFileDialog();
     } else if (!event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'f') {
       event.preventDefault();
-      // Ensure a model is loaded before trying to focus
       if (submittedModelUrl && !isLoading && !error) {
         setRequestFocusObject(true);
       }
@@ -436,7 +435,7 @@ export default function Home() {
            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent-foreground h-8 w-8" title="Info">
-                <InfoIcon className="h-4 w-4" />
+                <GithubIcon className="h-4 w-4" />
                 <span className="sr-only">Info</span>
               </Button>
             </DropdownMenuTrigger>
@@ -657,14 +656,27 @@ export default function Home() {
                   </Button>
                 </div>
 
-                <div className="absolute top-4 right-4 z-10 p-3 bg-gradient-to-l from-transparent via-card/10 to-card/30 backdrop-blur-lg rounded-md shadow-lg text-xs">
+                 <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-4 right-4 z-10 h-9 w-9 bg-card/80 backdrop-blur-md border-border shadow-md hover:bg-accent/80 text-muted-foreground hover:text-accent-foreground"
+                      title="Show Shortcuts"
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                      <span className="sr-only">Show Shortcuts</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="mr-4 w-auto text-xs p-3">
                     <h3 className="font-semibold text-sm text-foreground mb-1">ShortKeys</h3>
                     <ul className="space-y-0.5 text-muted-foreground">
                         <li>Toggle Grid: <kbd>Alt</kbd> + <kbd>G</kbd></li>
                         <li>Open File: <kbd>Ctrl</kbd> + <kbd>N</kbd></li>
                         <li>Focus Model: <kbd>F</kbd></li>
                     </ul>
-                </div>
+                  </PopoverContent>
+                </Popover>
               </>
             )}
 
@@ -776,4 +788,3 @@ export default function Home() {
     </div>
   );
 }
-
